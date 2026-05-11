@@ -380,7 +380,7 @@ function cancelEditActual() {
 
 // 초기 렌더 (Firebase Auth → Firestore 로드 후 실행)
 initSync(function() {
-  refreshCategoryGlobals();     // 커스텀 카테고리 적용
+  if (typeof refreshCategoryGlobals === 'function') refreshCategoryGlobals(); // 커스텀 카테고리 적용
 
   // 플래너 이름 반영
   var pName = getPlannerName();

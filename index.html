@@ -986,7 +986,7 @@ function deleteCat(idx) {
 
 // 초기 렌더 (Firebase Auth → Firestore 로드 후 실행)
 initSync(function() {
-  refreshCategoryGlobals();
+  if (typeof refreshCategoryGlobals === 'function') refreshCategoryGlobals();
   var name = getPlannerName();
   if (name) {
     updatePlannerNameUI(name);

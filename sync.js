@@ -24,7 +24,7 @@ function initSync(onReady) {
   _onReadyFn = onReady;
   try {
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-    _db = firebase.firestore();
+    // _db는 아래 onAuthStateChanged 안에서 인증 확인 후 초기화 (pre-auth Firestore 접근 방지)
 
     firebase.auth().onAuthStateChanged(function(user) {
       _currentUser = user;
@@ -38,6 +38,9 @@ function initSync(onReady) {
         _showLoginScreen();
         return;
       }
+
+      // 인증 확인 후 Firestore 클라이언트를 처음 한 번만 초기화
+      if (!_db) _db = firebase.firestore();
 
       var sameUser = (_currentUserId === user.uid);
       _currentUserId = user.uid;
