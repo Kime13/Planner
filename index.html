@@ -340,7 +340,16 @@ function renderAnnual() {
   var d = getAnnual();
   document.getElementById('annual-ring').innerHTML =
     svgRing(d.progress, 90, 'white', 'rgba(255,255,255,.25)');
-  document.getElementById('annual-goal').textContent = d.goal;
+  var goalEl = document.getElementById('annual-goal');
+  if (d.goal) {
+    goalEl.textContent = d.goal;
+    goalEl.style.opacity = '';
+    goalEl.style.fontStyle = '';
+  } else {
+    goalEl.textContent = '목표를 설정해보세요 →';
+    goalEl.style.opacity = '0.6';
+    goalEl.style.fontStyle = 'italic';
+  }
   document.getElementById('core-actions').innerHTML = d.coreActions
     .filter(function(a){ return a.trim(); })
     .map(function(a, i){

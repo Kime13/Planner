@@ -176,8 +176,8 @@ function injectRecurringTasks(dk) {
 /* ---- 연간 ---- */
 function getAnnual() {
   return JSON.parse(localStorage.getItem(KEYS.annual)) || {
-    goal: '국제기구 또는 테크 PM으로 연봉 20% 올려서 이직하기',
-    coreActions: ['영어', 'AI공부', '이력서 완성 및 면접준비'],
+    goal: '',
+    coreActions: ['', '', ''],
     progress: 0
   };
 }
