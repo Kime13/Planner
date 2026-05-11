@@ -7,6 +7,7 @@ var KEYS = {
   weekly:    'planner_weekly',
   daily:     'planner_daily',
   recurring: 'planner_recurring',
+  settings:  'planner_settings',
 };
 
 var WEEK_CATS = ['업무', '자기계발', '이직', '타인과의 관계'];
@@ -93,6 +94,33 @@ function escHtml(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/* ---- 설정 & 카테고리 ---- */
+var _DEFAULT_CATS = [
+  { name: '업무',          color: '#6366f1' },
+  { name: '자기계발',      color: '#10b981' },
+  { name: '이직',          color: '#f59e0b' },
+  { name: '타인과의 관계', color: '#ec4899' }
+];
+
+function getSettings() {
+  return JSON.parse(localStorage.getItem(KEYS.settings)) || { weekCats: _DEFAULT_CATS };
+}
+function saveSettings(data) {
+  localStorage.setItem(KEYS.settings, JSON.stringify(data));
+  pushSync();
+}
+function getPlannerName() {
+  return getSettings().plannerName || '';
+}
+
+// 설정에서 읽어 WEEK_CATS / WEEKCAT_COLORS 전역 갱신
+function refreshCategoryGlobals() {
+  var cats = getSettings().weekCats;
+  WEEK_CATS = cats.map(function(c) { return c.name; });
+  WEEKCAT_COLORS = {};
+  cats.forEach(function(c) { WEEKCAT_COLORS[c.name] = c.color; });
 }
 
 /* ---- 반복 일정 ---- */

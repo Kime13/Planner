@@ -7,9 +7,31 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="app">
 
-  <a class="back-link" href="index.html">&#8592; Chloe's Planner</a>
+<!-- 로그인 화면 -->
+<div id="login-screen" style="display:none">
+  <div class="login-card">
+    <div class="login-logo">✨ 나만의 플래너</div>
+    <p class="login-desc">Google 계정으로 로그인하면<br>모든 기기에서 데이터가 동기화됩니다.</p>
+    <button class="btn-google" onclick="signInWithGoogle()">
+      <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.7 2.5 30.2 0 24 0 14.8 0 7 5.6 3.1 13.7l7.8 6C12.7 13.4 17.9 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.6-4.8 7.3l7.5 5.8c4.3-4 6.9-9.9 7.1-17.1z"/>
+        <path fill="#FBBC05" d="M10.9 28.3A14.6 14.6 0 0 1 9.5 24c0-1.5.3-2.9.8-4.3l-7.8-6A24 24 0 0 0 0 24c0 3.9.9 7.5 2.5 10.7l8.4-6.4z"/>
+        <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.7 2.2-6.1 0-11.3-3.9-13.1-9.3l-8.4 6.4C7 43.1 14.8 48 24 48z"/>
+      </svg>
+      Google로 로그인
+    </button>
+    <p class="login-error" id="login-error"></p>
+  </div>
+</div>
+
+<div class="app" style="display:none">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <a class="back-link" id="planner-back-link" style="margin-bottom:0" href="index.html">&#8592; 나만의 플래너</a>
+    <div class="user-badge" id="user-badge"></div>
+  </div>
 
   <!-- 날짜 헤더 + 달성률 링 -->
   <div class="day-hero">
@@ -58,6 +80,7 @@
 </div><!-- /.app -->
 
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="app.js"></script>
 <script src="sync.js"></script>
@@ -355,9 +378,19 @@ function cancelEditActual() {
   renderActual();
 }
 
-// 초기 렌더 (Firebase 동기화 후 실행)
+// 초기 렌더 (Firebase Auth → Firestore 로드 후 실행)
 initSync(function() {
-  injectRecurringTasks(dk);   // 반복 일정 자동 삽입
+  refreshCategoryGlobals();     // 커스텀 카테고리 적용
+
+  // 플래너 이름 반영
+  var pName = getPlannerName();
+  if (pName) {
+    var backLink = document.getElementById('planner-back-link');
+    if (backLink) backLink.innerHTML = '&#8592; ' + escHtml(pName);
+    document.title = formatKorDate(dk) + ' — ' + pName;
+  }
+
+  injectRecurringTasks(dk);     // 반복 일정 자동 삽입
   buildAddRow();
   updateProgress();
   renderAllTasks();

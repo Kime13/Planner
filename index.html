@@ -7,12 +7,34 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="app">
+
+<!-- 로그인 화면 -->
+<div id="login-screen" style="display:none">
+  <div class="login-card">
+    <div class="login-logo">✨ 나만의 플래너</div>
+    <p class="login-desc">Google 계정으로 로그인하면<br>모든 기기에서 데이터가 동기화됩니다.</p>
+    <button class="btn-google" onclick="signInWithGoogle()">
+      <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.7 2.5 30.2 0 24 0 14.8 0 7 5.6 3.1 13.7l7.8 6C12.7 13.4 17.9 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.6-4.8 7.3l7.5 5.8c4.3-4 6.9-9.9 7.1-17.1z"/>
+        <path fill="#FBBC05" d="M10.9 28.3A14.6 14.6 0 0 1 9.5 24c0-1.5.3-2.9.8-4.3l-7.8-6A24 24 0 0 0 0 24c0 3.9.9 7.5 2.5 10.7l8.4-6.4z"/>
+        <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.7 2.2-6.1 0-11.3-3.9-13.1-9.3l-8.4 6.4C7 43.1 14.8 48 24 48z"/>
+      </svg>
+      Google로 로그인
+    </button>
+    <p class="login-error" id="login-error"></p>
+  </div>
+</div>
+
+<div class="app" style="display:none">
 
   <!-- 상단 헤더 -->
   <header class="top-header">
-    <div class="logo">✨ Chloe's Planner</div>
-    <div class="date-badge" id="today-badge"></div>
+    <div class="logo" id="planner-logo">✨ 나만의 플래너</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="date-badge" id="today-badge"></div>
+      <div class="user-badge" id="user-badge"></div>
+    </div>
   </header>
 
   <!-- 연간 카드 -->
@@ -83,6 +105,32 @@
       <button class="btn btn-edit" onclick="openRecurringModal(null)">+ 추가</button>
     </div>
     <div id="recurring-list"></div>
+  </div>
+
+  <!-- 기본 설정 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-label">⚙️ 기본 설정</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">플래너 이름</div>
+        <div id="planner-name-display" style="font-size:15px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+      </div>
+      <button class="btn btn-edit" onclick="openNameModal(false)" style="flex-shrink:0">변경</button>
+    </div>
+  </div>
+
+  <!-- 카테고리 설정 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-label">🏷️ 카테고리 설정</span>
+      <button class="btn btn-edit" onclick="openCatModal(-1)">+ 추가</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+      주간·매일 할일에 사용할 카테고리를 관리합니다.
+    </p>
+    <div id="category-list"></div>
   </div>
 
 </div><!-- /.app -->
@@ -213,7 +261,48 @@
   </div>
 </div>
 
+<!-- ===== 모달: 플래너 이름 설정 ===== -->
+<div class="modal-overlay" id="modal-planner-name" style="display:none" onclick="closeIfOverlay(event,'modal-planner-name')">
+  <div class="modal" style="text-align:center;max-width:400px">
+    <div style="font-size:40px;margin-bottom:10px">✨</div>
+    <div class="modal-title" id="name-modal-title">플래너 이름 설정</div>
+    <p id="name-modal-desc" style="font-size:13px;color:var(--muted);margin:-8px 0 20px;line-height:1.65">
+      이 플래너를 어떻게 부를까요?<br>헤더에 표시되며 언제든지 변경할 수 있어요.
+    </p>
+    <div class="form-group" style="text-align:left">
+      <input class="input" id="input-planner-name" type="text"
+             placeholder="예: Chloe's Planner, 내 플래너, 2026 플랜..."
+             style="font-size:15px;text-align:center"
+             onkeydown="if(event.key==='Enter') savePlannerName()">
+    </div>
+    <div class="modal-footer" style="justify-content:center;gap:10px;margin-top:16px">
+      <button class="btn btn-ghost" id="name-modal-cancel" onclick="closeModal('modal-planner-name')">나중에</button>
+      <button class="btn btn-primary" onclick="savePlannerName()">저장하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 모달: 카테고리 추가/편집 ===== -->
+<div class="modal-overlay" id="modal-category" style="display:none" onclick="closeIfOverlay(event,'modal-category')">
+  <div class="modal">
+    <div class="modal-title" id="cat-modal-title">카테고리 추가</div>
+    <div class="form-group">
+      <label class="form-label">이름</label>
+      <input class="input" id="input-cat-name" type="text" placeholder="카테고리 이름...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">색상</label>
+      <div class="color-picker-row" id="cat-color-picker"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-category')">취소</button>
+      <button class="btn btn-primary" onclick="saveCatModal()">저장</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="app.js"></script>
 <script src="sync.js"></script>
@@ -243,6 +332,7 @@ function renderAll() {
   renderWeekly();
   renderCalendar();
   renderRecurring();
+  renderCategoryList();
 }
 
 /* ===== 연간 ===== */
@@ -780,8 +870,132 @@ function toggleRecurring(id) {
   renderRecurring();
 }
 
-// 초기 렌더 (Firebase 동기화 후 실행)
-initSync(renderAll);
+/* ===== 플래너 이름 ===== */
+function updatePlannerNameUI(name) {
+  var display = name || '나만의 플래너';
+  var logo = document.getElementById('planner-logo');
+  if (logo) logo.textContent = '✨ ' + display;
+  var nameDisplay = document.getElementById('planner-name-display');
+  if (nameDisplay) nameDisplay.textContent = display;
+  document.title = display;
+}
+
+var _nameIsFirstSetup = false;
+
+function openNameModal(isFirst) {
+  _nameIsFirstSetup = !!isFirst;
+  document.getElementById('input-planner-name').value = getPlannerName();
+  document.getElementById('name-modal-title').textContent =
+    isFirst ? '플래너 이름 설정' : '플래너 이름 변경';
+  document.getElementById('name-modal-desc').style.display = isFirst ? '' : 'none';
+  document.getElementById('name-modal-cancel').style.display = isFirst ? 'none' : '';
+  document.getElementById('modal-planner-name').style.display = 'flex';
+  setTimeout(function() {
+    var inp = document.getElementById('input-planner-name');
+    if (inp) { inp.focus(); inp.select(); }
+  }, 80);
+}
+
+function savePlannerName() {
+  var name = document.getElementById('input-planner-name').value.trim();
+  if (!name) { document.getElementById('input-planner-name').focus(); return; }
+  var s = getSettings();
+  s.plannerName = name;
+  saveSettings(s);
+  updatePlannerNameUI(name);
+  closeModal('modal-planner-name');
+}
+
+/* ===== 카테고리 관리 ===== */
+var CAT_PRESET_COLORS = [
+  '#6366f1','#8b5cf6','#ec4899','#ef4444',
+  '#f97316','#f59e0b','#84cc16','#10b981',
+  '#06b6d4','#3b82f6'
+];
+var _catEditIdx    = -1;   // -1 = 신규
+var _catPickColor  = CAT_PRESET_COLORS[0];
+
+function renderCategoryList() {
+  var cats = getSettings().weekCats;
+  var el   = document.getElementById('category-list');
+  if (!cats.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:13px;font-style:italic;padding:6px 0">카테고리가 없습니다.</p>';
+    return;
+  }
+  el.innerHTML = cats.map(function(c, i) {
+    return '<div class="cat-manage-item">'
+      + '<span class="cat-dot" style="background:' + c.color + '"></span>'
+      + '<span class="cat-manage-name">' + escHtml(c.name) + '</span>'
+      + '<button class="btn-edit-sm" onclick="openCatModal(' + i + ')" title="편집">✏</button>'
+      + '<button class="btn-danger-sm" onclick="deleteCat(' + i + ')">×</button>'
+      + '</div>';
+  }).join('');
+}
+
+function _renderColorPicker() {
+  document.getElementById('cat-color-picker').innerHTML = CAT_PRESET_COLORS.map(function(c) {
+    return '<button type="button" class="color-swatch' + (c === _catPickColor ? ' active' : '') + '"'
+      + ' style="background:' + c + '" onclick="pickCatColor(\'' + c + '\')"></button>';
+  }).join('');
+}
+
+function pickCatColor(c) { _catPickColor = c; _renderColorPicker(); }
+
+function openCatModal(idx) {
+  _catEditIdx = (typeof idx === 'number') ? idx : -1;
+  var cats = getSettings().weekCats;
+  document.getElementById('cat-modal-title').textContent = _catEditIdx >= 0 ? '카테고리 편집' : '카테고리 추가';
+  if (_catEditIdx >= 0) {
+    document.getElementById('input-cat-name').value = cats[_catEditIdx].name;
+    _catPickColor = cats[_catEditIdx].color;
+  } else {
+    document.getElementById('input-cat-name').value = '';
+    _catPickColor = CAT_PRESET_COLORS[cats.length % CAT_PRESET_COLORS.length];
+  }
+  _renderColorPicker();
+  document.getElementById('modal-category').style.display = 'flex';
+}
+
+function saveCatModal() {
+  var name = document.getElementById('input-cat-name').value.trim();
+  if (!name) { document.getElementById('input-cat-name').focus(); return; }
+  var s    = getSettings();
+  var cats = s.weekCats;
+  if (_catEditIdx >= 0) {
+    cats[_catEditIdx] = { name: name, color: _catPickColor };
+  } else {
+    cats.push({ name: name, color: _catPickColor });
+  }
+  s.weekCats = cats;
+  saveSettings(s);
+  refreshCategoryGlobals();
+  closeModal('modal-category');
+  renderCategoryList();
+  renderWeekly();   // 주간 카테고리 색상/이름 반영
+}
+
+function deleteCat(idx) {
+  if (!confirm('이 카테고리를 삭제하면\n해당 태그가 달린 기존 할일에는 영향을 주지 않습니다.\n삭제할까요?')) return;
+  var s = getSettings();
+  s.weekCats.splice(idx, 1);
+  saveSettings(s);
+  refreshCategoryGlobals();
+  renderCategoryList();
+  renderWeekly();
+}
+
+// 초기 렌더 (Firebase Auth → Firestore 로드 후 실행)
+initSync(function() {
+  refreshCategoryGlobals();
+  var name = getPlannerName();
+  if (name) {
+    updatePlannerNameUI(name);
+  }
+  renderAll();
+  if (!name) {
+    openNameModal(true); // 최초 로그인: 이름 설정 모달
+  }
+});
 </script>
 </body>
 </html>
