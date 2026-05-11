@@ -133,9 +133,8 @@ function renderAllTasks() {
     }
     return '<div class="task-item' + (t.done ? ' done' : '') + '">'
       + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleAllTask(\'' + t.id + '\')">'
-      + '<span class="task-text" onclick="toggleAllTask(\'' + t.id + '\')">' + escHtml(t.text) + '</span>'
+      + '<span class="task-text task-text--editable" onclick="startEditAllTask(\'' + t.id + '\')">' + escHtml(t.text) + '</span>'
       + wcBadge + ccBadge
-      + '<button class="btn-edit-sm" onclick="startEditAllTask(\'' + t.id + '\')">✏</button>'
       + '<button class="btn-danger-sm" onclick="deleteAllTask(\'' + t.id + '\')">×</button>'
       + '</div>';
   }).join('');
@@ -207,8 +206,7 @@ function renderPriorities() {
     return '<div class="task-item' + (t.done ? ' done' : '') + '">'
       + '<span class="prio-num">' + (i + 1) + '</span>'
       + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="togglePriority(\'' + t.id + '\')">'
-      + '<span class="task-text" onclick="togglePriority(\'' + t.id + '\')">' + escHtml(t.text) + '</span>'
-      + '<button class="btn-edit-sm" onclick="startEditPriority(\'' + t.id + '\')">✏</button>'
+      + '<span class="task-text task-text--editable" onclick="startEditPriority(\'' + t.id + '\')">' + escHtml(t.text) + '</span>'
       + '<button class="btn-danger-sm" onclick="deletePriority(\'' + t.id + '\')">×</button>'
       + '</div>';
   }).join('');
@@ -284,8 +282,7 @@ function renderActual() {
     }
     return '<div class="actual-item">'
       + '<div class="actual-dot"></div>'
-      + '<div class="actual-text">' + escHtml(a.text) + '</div>'
-      + '<button class="btn-edit-sm" onclick="startEditActual(\'' + a.id + '\')">✏</button>'
+      + '<div class="actual-text task-text--editable" onclick="startEditActual(\'' + a.id + '\')">' + escHtml(a.text) + '</div>'
       + '<button class="btn-danger-sm" onclick="deleteActual(\'' + a.id + '\')">×</button>'
       + '</div>';
   }).join('');

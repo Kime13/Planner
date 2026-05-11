@@ -547,6 +547,17 @@ body {
 }
 .task-item.done .task-text { text-decoration: line-through; color: var(--muted); }
 
+/* 탭/클릭으로 편집 가능한 텍스트 */
+.task-text--editable { cursor: text; }
+@media (hover: hover) {
+  /* 데스크톱: 호버 시 편집 가능 힌트 */
+  .task-text--editable:hover {
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    text-decoration-color: #c8d0e0;
+  }
+}
+
 /* 우선순위 번호 */
 .prio-num {
   width: 22px; height: 22px;
