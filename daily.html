@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chloe's Planner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <a class="back-link" href="index.html">&#8592; Chloe's Planner</a>
+
+  <!-- 날짜 헤더 + 달성률 링 -->
+  <div class="day-hero">
+    <div class="day-hero-left">
+      <div class="day-date" id="day-date-text"></div>
+      <div class="day-sub" id="day-progress-sub">오늘도 화이팅! 💪</div>
+    </div>
+    <div id="day-ring"></div>
+  </div>
+
+  <!-- 오늘의 할 일 (주간 카테고리 연동) -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-label">📋 오늘의 할 일</span>
+      <span id="all-tasks-count" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="task-list" id="all-tasks-list"></div>
+    <!-- 카테고리 선택 + 추가 (동적 생성) -->
+    <div id="all-tasks-add-row"></div>
+  </div>
+
+  <!-- 3가지 우선순위 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-label">⭐ 오늘의 3가지 우선순위</span>
+      <span style="font-size:12px;color:var(--muted)">가장 중요한 3가지만</span>
+    </div>
+    <div class="task-list" id="priorities-list"></div>
+    <div id="priority-add-area"></div>
+  </div>
+
+  <!-- 실제로 한 것 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-label">✅ 실제로 한 것</span>
+    </div>
+    <div id="actual-list"></div>
+    <div class="add-row">
+      <input class="add-input" id="actual-input" type="text"
+             placeholder="오늘 실제로 한 것을 기록해요..."
+             onkeydown="if(event.key==='Enter') addActual()">
+      <button class="btn btn-primary btn-sm" onclick="addActual()">추가</button>
+    </div>
+  </div>
+
+</div><!-- /.app -->
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="app.js"></script>
+<script src="sync.js"></script>
+<script>
+var params = new URLSearchParams(window.location.search);
+var dk = params.get('date') || dateKey();
+
+// 현재 편집 중인 항목 ID 추적
+var editingAllTaskId  = null;
+var editingPriorityId = null;
+var editingActualId   = null;
+
+document.getElementById('day-date-text').textContent = formatKorDate(dk);
+document.title = formatKorDate(dk) + ' — Chloe\'s Planner';
+
+/* ===== 달성률 ===== */
+function updateProgress() {
+  var pct = calcDayProgress(dk);
+  if (pct === null) pct = 0;
+  document.getElementById('day-ring').innerHTML =
+    svgRing(pct, 72, 'white', 'rgba(255,255,255,.25)');
+  document.getElementById('day-progress-sub').textContent =
+    pct === 0   ? '오늘도 화이팅! 💪' :
+    pct === 100 ? '오늘 모든 할 일 완료! 🎉' :
+    '달성률 ' + pct + '% — 잘 하고 있어요!';
+}
+
+/* ===== 추가 행 동적 생성 (주간 카테고리 + 핵심목표) ===== */
+function buildAddRow() {
+  var annual      = getAnnual();
+  var coreOptions = '<option value="">핵심목표 없음</option>'
+    + annual.coreActions.filter(function(a){ return a.trim(); }).map(function(a, i){
+        return '<option value="' + escHtml(a) + '">' + escHtml(a) + '</option>';
+      }).join('');
+  var weekOptions = '<option value="">카테고리 없음</option>'
+    + WEEK_CATS.map(function(c){
+        return '<option value="' + escHtml(c) + '">' + escHtml(c) + '</option>';
+      }).join('');
+
+  document.getElementById('all-tasks-add-row').innerHTML =
+    '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+    + '<select class="add-select" id="day-weekcat-select">' + weekOptions + '</select>'
+    + '<select class="add-select" id="day-corecat-select">' + coreOptions + '</select>'
+    + '<input class="add-input" id="all-tasks-input" type="text" placeholder="할 일 추가..."'
+    + ' onkeydown="if(event.key===\'Enter\') addAllTask()" style="flex:1;min-width:120px">'
+    + '<button class="btn btn-primary btn-sm" onclick="addAllTask()">추가</button>'
+    + '</div>';
+}
+
+/* ===== 오늘의 할 일 (주간 카테고리 + 핵심목표 배지) ===== */
+function renderAllTasks() {
+  var data   = getDayData(dk);
+  var tasks  = data.allTasks;
+  var done   = tasks.filter(function(t){ return t.done; }).length;
+  var annual = getAnnual();
+  document.getElementById('all-tasks-count').textContent = done + ' / ' + tasks.length + ' 완료';
+
+  document.getElementById('all-tasks-list').innerHTML = tasks.map(function(t) {
+    var wcColor = t.weekCat ? (WEEKCAT_COLORS[t.weekCat] || '#6366f1') : null;
+    var wcBadge = wcColor ? '<span class="cat-badge" style="background:' + wcColor + '18;color:' + wcColor + '">' + escHtml(t.weekCat) + '</span>' : '';
+    var coreIdx = t.coreCategory ? annual.coreActions.indexOf(t.coreCategory) : -1;
+    var ccColor = coreIdx >= 0 ? CORE_COLORS[coreIdx] : null;
+    var ccBadge = ccColor ? '<span class="cat-badge" style="background:' + ccColor + '18;color:' + ccColor + '">' + escHtml(t.coreCategory) + '</span>' : '';
+
+    if (t.id === editingAllTaskId) {
+      return '<div class="task-item">'
+        + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleAllTask(\'' + t.id + '\')">'
+        + '<input class="task-edit-input" id="ei-' + t.id + '" value="' + escHtml(t.text) + '"'
+        + ' onkeydown="if(event.key===\'Enter\')saveEditAllTask(\'' + t.id + '\');if(event.key===\'Escape\'){editingAllTaskId=null;renderAllTasks();}"'
+        + ' onblur="saveEditAllTask(\'' + t.id + '\')">'
+        + wcBadge + ccBadge
+        + '<button class="btn-danger-sm" onclick="deleteAllTask(\'' + t.id + '\')">×</button>'
+        + '</div>';
+    }
+    return '<div class="task-item' + (t.done ? ' done' : '') + '">'
+      + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleAllTask(\'' + t.id + '\')">'
+      + '<span class="task-text" onclick="toggleAllTask(\'' + t.id + '\')">' + escHtml(t.text) + '</span>'
+      + wcBadge + ccBadge
+      + '<button class="btn-edit-sm" onclick="editingAllTaskId=\'' + t.id + '\';renderAllTasks()">✏</button>'
+      + '<button class="btn-danger-sm" onclick="deleteAllTask(\'' + t.id + '\')">×</button>'
+      + '</div>';
+  }).join('');
+
+  if (editingAllTaskId) {
+    var inp = document.getElementById('ei-' + editingAllTaskId);
+    if (inp) { inp.focus(); inp.select(); }
+  }
+
+  updateProgress();
+}
+
+function addAllTask() {
+  var input   = document.getElementById('all-tasks-input');
+  var catSel  = document.getElementById('day-weekcat-select');
+  var coreSel = document.getElementById('day-corecat-select');
+  var text    = input.value.trim();
+  if (!text) return;
+  var data = getDayData(dk);
+  data.allTasks.push({
+    id: uid(), text: text, done: false,
+    weekCat:      catSel  ? catSel.value  : '',
+    coreCategory: coreSel ? coreSel.value : ''
+  });
+  saveDayData(dk, data);
+  input.value = '';
+  renderAllTasks();
+}
+
+function saveEditAllTask(id) {
+  if (editingAllTaskId !== id) return;
+  var inp = document.getElementById('ei-' + id);
+  if (!inp) return;
+  var newText = inp.value.trim();
+  editingAllTaskId = null;
+  if (newText) {
+    var data = getDayData(dk);
+    data.allTasks.forEach(function(t){ if (t.id === id) t.text = newText; });
+    saveDayData(dk, data);
+  }
+  renderAllTasks();
+}
+
+function toggleAllTask(id) {
+  var data = getDayData(dk);
+  data.allTasks.forEach(function(t){ if (t.id === id) t.done = !t.done; });
+  saveDayData(dk, data);
+  renderAllTasks();
+}
+
+function deleteAllTask(id) {
+  var data = getDayData(dk);
+  data.allTasks = data.allTasks.filter(function(t){ return t.id !== id; });
+  saveDayData(dk, data);
+  renderAllTasks();
+}
+
+/* ===== 3가지 우선순위 ===== */
+function renderPriorities() {
+  var data  = getDayData(dk);
+  var tasks = data.priorities;
+
+  document.getElementById('priorities-list').innerHTML = tasks.map(function(t, i) {
+    if (t.id === editingPriorityId) {
+      return '<div class="task-item">'
+        + '<span class="prio-num">' + (i + 1) + '</span>'
+        + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="togglePriority(\'' + t.id + '\')">'
+        + '<input class="task-edit-input" id="ep-' + t.id + '" value="' + escHtml(t.text) + '"'
+        + ' onkeydown="if(event.key===\'Enter\')saveEditPriority(\'' + t.id + '\');if(event.key===\'Escape\'){editingPriorityId=null;renderPriorities();}"'
+        + ' onblur="saveEditPriority(\'' + t.id + '\')">'
+        + '<button class="btn-danger-sm" onclick="deletePriority(\'' + t.id + '\')">×</button>'
+        + '</div>';
+    }
+    return '<div class="task-item' + (t.done ? ' done' : '') + '">'
+      + '<span class="prio-num">' + (i + 1) + '</span>'
+      + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="togglePriority(\'' + t.id + '\')">'
+      + '<span class="task-text" onclick="togglePriority(\'' + t.id + '\')">' + escHtml(t.text) + '</span>'
+      + '<button class="btn-edit-sm" onclick="editingPriorityId=\'' + t.id + '\';renderPriorities()">✏</button>'
+      + '<button class="btn-danger-sm" onclick="deletePriority(\'' + t.id + '\')">×</button>'
+      + '</div>';
+  }).join('');
+
+  if (editingPriorityId) {
+    var inp = document.getElementById('ep-' + editingPriorityId);
+    if (inp) { inp.focus(); inp.select(); }
+  }
+
+  var addArea = document.getElementById('priority-add-area');
+  if (tasks.length < 3) {
+    addArea.innerHTML =
+      '<div class="add-row">'
+      + '<input class="add-input" id="prio-input" type="text"'
+      + ' placeholder="우선순위 ' + (tasks.length + 1) + '번 입력..."'
+      + ' onkeydown="if(event.key===\'Enter\') addPriority()">'
+      + '<button class="btn btn-primary btn-sm" onclick="addPriority()">추가</button>'
+      + '</div>';
+  } else {
+    addArea.innerHTML =
+      '<p style="font-size:13px;color:var(--muted);margin-top:10px;text-align:center">'
+      + '3가지 우선순위가 모두 설정됐어요 👍</p>';
+  }
+}
+
+function addPriority() {
+  var input = document.getElementById('prio-input');
+  if (!input) return;
+  var text = input.value.trim();
+  if (!text) return;
+  var data = getDayData(dk);
+  if (data.priorities.length >= 3) return;
+  data.priorities.push({ id: uid(), text: text, done: false });
+  saveDayData(dk, data);
+  renderPriorities();
+}
+
+function saveEditPriority(id) {
+  if (editingPriorityId !== id) return;
+  var inp = document.getElementById('ep-' + id);
+  if (!inp) return;
+  var newText = inp.value.trim();
+  editingPriorityId = null;
+  if (newText) {
+    var data = getDayData(dk);
+    data.priorities.forEach(function(t){ if (t.id === id) t.text = newText; });
+    saveDayData(dk, data);
+  }
+  renderPriorities();
+}
+
+function togglePriority(id) {
+  var data = getDayData(dk);
+  data.priorities.forEach(function(t){ if (t.id === id) t.done = !t.done; });
+  saveDayData(dk, data);
+  renderPriorities();
+}
+
+function deletePriority(id) {
+  var data = getDayData(dk);
+  data.priorities = data.priorities.filter(function(t){ return t.id !== id; });
+  saveDayData(dk, data);
+  renderPriorities();
+}
+
+/* ===== 실제로 한 것 ===== */
+function renderActual() {
+  var data = getDayData(dk);
+  document.getElementById('actual-list').innerHTML = data.actual.map(function(a) {
+    if (a.id === editingActualId) {
+      return '<div class="actual-item">'
+        + '<div class="actual-dot"></div>'
+        + '<input class="task-edit-input" id="ea-' + a.id + '" value="' + escHtml(a.text) + '"'
+        + ' onkeydown="if(event.key===\'Enter\')saveEditActual(\'' + a.id + '\');if(event.key===\'Escape\'){editingActualId=null;renderActual();}"'
+        + ' onblur="saveEditActual(\'' + a.id + '\')">'
+        + '<button class="btn-danger-sm" onclick="deleteActual(\'' + a.id + '\')">×</button>'
+        + '</div>';
+    }
+    return '<div class="actual-item">'
+      + '<div class="actual-dot"></div>'
+      + '<div class="actual-text">' + escHtml(a.text) + '</div>'
+      + '<button class="btn-edit-sm" onclick="editingActualId=\'' + a.id + '\';renderActual()">✏</button>'
+      + '<button class="btn-danger-sm" onclick="deleteActual(\'' + a.id + '\')">×</button>'
+      + '</div>';
+  }).join('');
+
+  if (editingActualId) {
+    var inp = document.getElementById('ea-' + editingActualId);
+    if (inp) { inp.focus(); inp.select(); }
+  }
+}
+
+function saveEditActual(id) {
+  if (editingActualId !== id) return;
+  var inp = document.getElementById('ea-' + id);
+  if (!inp) return;
+  var newText = inp.value.trim();
+  editingActualId = null;
+  if (newText) {
+    var data = getDayData(dk);
+    data.actual.forEach(function(a){ if (a.id === id) a.text = newText; });
+    saveDayData(dk, data);
+  }
+  renderActual();
+}
+
+function addActual() {
+  var input = document.getElementById('actual-input');
+  var text  = input.value.trim();
+  if (!text) return;
+  var data = getDayData(dk);
+  data.actual.push({ id: uid(), text: text });
+  saveDayData(dk, data);
+  input.value = '';
+  renderActual();
+}
+
+function deleteActual(id) {
+  var data = getDayData(dk);
+  data.actual = data.actual.filter(function(a){ return a.id !== id; });
+  saveDayData(dk, data);
+  renderActual();
+}
+
+// 초기 렌더 (Firebase 동기화 후 실행)
+initSync(function() {
+  buildAddRow();
+  updateProgress();
+  renderAllTasks();
+  renderPriorities();
+  renderActual();
+});
+</script>
+</body>
+</html>
