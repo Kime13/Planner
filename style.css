@@ -342,6 +342,43 @@ body {
   outline: none;
 }
 
+/* ===== 인라인 편집 확인/취소 버튼 ===== */
+.btn-save-sm {
+  background: none; border: none;
+  color: var(--success); font-size: 16px; font-weight: 700;
+  cursor: pointer; padding: 4px 7px;
+  border-radius: 6px; transition: all .15s;
+  flex-shrink: 0; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-save-sm:hover { background: #d1fae5; }
+
+.btn-cancel-sm {
+  background: none; border: none;
+  color: #94a3b8; font-size: 16px;
+  cursor: pointer; padding: 4px 7px;
+  border-radius: 6px; transition: all .15s;
+  flex-shrink: 0; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-cancel-sm:hover { background: var(--bg); color: var(--text); }
+
+/* 편집 중인 항목 강조 */
+.task-item--editing {
+  border-color: var(--primary) !important;
+  background: white !important;
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* 모바일 터치 타겟 확대 */
+@media (hover: none) and (pointer: coarse) {
+  .btn-edit-sm, .btn-danger-sm, .btn-save-sm, .btn-cancel-sm {
+    min-width: 36px; min-height: 36px;
+    padding: 6px 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+}
+
 /* ===== 모달 ===== */
 .modal-overlay {
   position: fixed; inset: 0;
@@ -542,6 +579,56 @@ body {
   flex-shrink: 0;
 }
 .actual-text { flex: 1; font-size: 14px; color: var(--text); line-height: 1.55; word-break: break-all; }
+
+/* ===== 반복 일정 ===== */
+.recurring-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 13px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid transparent;
+  margin-bottom: 7px;
+  transition: all .15s;
+}
+.recurring-item:last-child { margin-bottom: 0; }
+.recurring-item:hover { border-color: var(--border); background: white; }
+.recurring-inactive { opacity: 0.45; }
+.recurring-text { font-size: 14px; font-weight: 500; color: var(--text); }
+
+.repeat-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.weekday-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.weekday-btn {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .15s;
+  display: flex; align-items: center; justify-content: center;
+  font-family: inherit;
+}
+.weekday-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+.weekday-btn:hover:not(.active) { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+.btn-toggle-sm {
+  background: none; border: none;
+  color: #94a3b8; font-size: 13px;
+  cursor: pointer; padding: 2px 5px;
+  border-radius: 5px; transition: all .15s; flex-shrink: 0; line-height: 1;
+}
+.btn-toggle-sm:hover { color: var(--warning); background: #fef9c3; }
 
 /* ===== 반응형 ===== */
 @media (max-width: 720px) {

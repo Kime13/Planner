@@ -76,6 +76,15 @@
     <div class="cal-grid" id="cal-grid"></div>
   </div>
 
+  <!-- 반복 일정 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-label">🔁 반복 일정</span>
+      <button class="btn btn-edit" onclick="openRecurringModal(null)">+ 추가</button>
+    </div>
+    <div id="recurring-list"></div>
+  </div>
+
 </div><!-- /.app -->
 
 <!-- ===== 모달: 연간 편집 ===== -->
@@ -158,6 +167,52 @@
   </div>
 </div>
 
+<!-- ===== 모달: 반복 일정 추가/편집 ===== -->
+<div class="modal-overlay" id="modal-recurring" style="display:none" onclick="closeIfOverlay(event,'modal-recurring')">
+  <div class="modal">
+    <div class="modal-title" id="recurring-modal-title">반복 일정 추가</div>
+
+    <div class="form-group">
+      <label class="form-label">할 일</label>
+      <input class="input" id="input-recurring-text" type="text" placeholder="반복할 일정 이름...">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">반복 주기</label>
+      <select class="input" id="input-recurring-repeat" onchange="onRepeatTypeChange()">
+        <option value="daily">매일</option>
+        <option value="weekly">매주</option>
+        <option value="monthly">매월</option>
+      </select>
+    </div>
+
+    <div class="form-group" id="recurring-weekday-group" style="display:none">
+      <label class="form-label">요일 선택</label>
+      <div class="weekday-picker" id="recurring-weekday-picker"></div>
+    </div>
+
+    <div class="form-group" id="recurring-monthday-group" style="display:none">
+      <label class="form-label">매월 몇 일 <span style="font-weight:400;color:var(--muted)">(1 ~ 31)</span></label>
+      <input class="input" id="input-recurring-monthday" type="number" min="1" max="31" placeholder="예: 1">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">주간 카테고리</label>
+      <select class="input" id="recurring-weekcat-select"></select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">핵심목표 태그</label>
+      <select class="input" id="recurring-corecat-select"></select>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-recurring')">취소</button>
+      <button class="btn btn-primary" onclick="saveRecurringModal()">저장</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="app.js"></script>
@@ -187,6 +242,7 @@ function renderAll() {
   renderMonthly();
   renderWeekly();
   renderCalendar();
+  renderRecurring();
 }
 
 /* ===== 연간 ===== */
@@ -557,6 +613,171 @@ function deleteWeekTask(id) {
   renderWeekModalBody();
   renderWeekly();
   renderMonthly();
+}
+
+/* ===== 반복 일정 ===== */
+var recurringEditId = null;
+var selectedWeekday = 1; // 1=월 ~ 7=일
+
+function repeatLabel(r) {
+  var days = ['','월','화','수','목','금','토','일'];
+  if (r.repeat === 'daily')   return '매일';
+  if (r.repeat === 'weekly')  return '매주 ' + (days[+r.weekDay] || '') + '요일';
+  if (r.repeat === 'monthly') return '매월 ' + r.monthDay + '일';
+  return '';
+}
+
+function renderRecurring() {
+  var list = getRecurring();
+  var el   = document.getElementById('recurring-list');
+  if (!list.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:13px;font-style:italic;padding:6px 0">'
+      + '반복 일정이 없습니다. + 추가 버튼으로 설정하세요.</p>';
+    return;
+  }
+  var colors = { daily: '#6366f1', weekly: '#10b981', monthly: '#f59e0b' };
+  el.innerHTML = list.map(function(r) {
+    var color    = colors[r.repeat] || '#6366f1';
+    var inactive = (r.active === false);
+    var wcColor  = r.weekCat ? (WEEKCAT_COLORS[r.weekCat] || '#6366f1') : null;
+    return '<div class="recurring-item' + (inactive ? ' recurring-inactive' : '') + '">'
+      + '<div style="flex:1;min-width:0">'
+      + '<div class="recurring-text"' + (inactive ? ' style="text-decoration:line-through"' : '') + '>'
+      + escHtml(r.text) + '</div>'
+      + '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">'
+      + '<span class="repeat-badge" style="background:' + color + '18;color:' + color + '">' + repeatLabel(r) + '</span>'
+      + (wcColor ? '<span class="cat-badge" style="background:' + wcColor + '18;color:' + wcColor + '">' + escHtml(r.weekCat) + '</span>' : '')
+      + (r.coreCategory ? '<span class="cat-badge" style="background:#94a3b818;color:var(--muted)">' + escHtml(r.coreCategory) + '</span>' : '')
+      + '</div></div>'
+      + '<button class="btn-edit-sm" onclick="editRecurring(\'' + r.id + '\')" title="편집">✏</button>'
+      + '<button class="btn-toggle-sm" onclick="toggleRecurring(\'' + r.id + '\')" title="' + (inactive ? '활성화' : '일시중지') + '">'
+      + (inactive ? '▶' : '⏸') + '</button>'
+      + '<button class="btn-danger-sm" onclick="deleteRecurring(\'' + r.id + '\')">×</button>'
+      + '</div>';
+  }).join('');
+}
+
+function renderWeekdayPicker(sel) {
+  var days = [{n:'월',v:1},{n:'화',v:2},{n:'수',v:3},{n:'목',v:4},{n:'금',v:5},{n:'토',v:6},{n:'일',v:7}];
+  document.getElementById('recurring-weekday-picker').innerHTML = days.map(function(d) {
+    return '<button type="button" class="weekday-btn' + (d.v === sel ? ' active' : '') + '"'
+      + ' onclick="selectWeekday(' + d.v + ')">' + d.n + '</button>';
+  }).join('');
+}
+
+function selectWeekday(v) {
+  selectedWeekday = v;
+  renderWeekdayPicker(v);
+}
+
+function onRepeatTypeChange() {
+  var val = document.getElementById('input-recurring-repeat').value;
+  document.getElementById('recurring-weekday-group').style.display  = (val === 'weekly')  ? '' : 'none';
+  document.getElementById('recurring-monthday-group').style.display = (val === 'monthly') ? '' : 'none';
+}
+
+function openRecurringModal(editId) {
+  recurringEditId = editId || null;
+  var annual = getAnnual();
+
+  document.getElementById('recurring-modal-title').textContent =
+    editId ? '반복 일정 편집' : '반복 일정 추가';
+
+  // 주간 카테고리 옵션
+  document.getElementById('recurring-weekcat-select').innerHTML =
+    '<option value="">없음</option>'
+    + WEEK_CATS.map(function(c) {
+        return '<option value="' + escHtml(c) + '">' + escHtml(c) + '</option>';
+      }).join('');
+
+  // 핵심목표 옵션
+  document.getElementById('recurring-corecat-select').innerHTML =
+    '<option value="">없음</option>'
+    + annual.coreActions.filter(function(a) { return a.trim(); }).map(function(a) {
+        return '<option value="' + escHtml(a) + '">' + escHtml(a) + '</option>';
+      }).join('');
+
+  if (editId) {
+    var found = null;
+    var list = getRecurring();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === editId) { found = list[i]; break; }
+    }
+    if (found) {
+      document.getElementById('input-recurring-text').value      = found.text;
+      document.getElementById('input-recurring-repeat').value    = found.repeat;
+      document.getElementById('input-recurring-monthday').value  = found.monthDay || '';
+      document.getElementById('recurring-weekcat-select').value  = found.weekCat      || '';
+      document.getElementById('recurring-corecat-select').value  = found.coreCategory || '';
+      selectedWeekday = found.weekDay ? +found.weekDay : 1;
+    }
+  } else {
+    document.getElementById('input-recurring-text').value     = '';
+    document.getElementById('input-recurring-repeat').value   = 'daily';
+    document.getElementById('input-recurring-monthday').value = '';
+    document.getElementById('recurring-weekcat-select').value  = '';
+    document.getElementById('recurring-corecat-select').value  = '';
+    selectedWeekday = 1;
+  }
+
+  onRepeatTypeChange();
+  renderWeekdayPicker(selectedWeekday);
+  document.getElementById('modal-recurring').style.display = 'flex';
+}
+
+function editRecurring(id) { openRecurringModal(id); }
+
+function saveRecurringModal() {
+  var text = document.getElementById('input-recurring-text').value.trim();
+  if (!text) { document.getElementById('input-recurring-text').focus(); return; }
+
+  var repeat   = document.getElementById('input-recurring-repeat').value;
+  var monthDay = parseInt(document.getElementById('input-recurring-monthday').value, 10) || 1;
+  var weekCat  = document.getElementById('recurring-weekcat-select').value;
+  var coreCat  = document.getElementById('recurring-corecat-select').value;
+
+  var list = getRecurring();
+  if (recurringEditId) {
+    list = list.map(function(r) {
+      if (r.id !== recurringEditId) return r;
+      var u = {}; for (var k in r) u[k] = r[k];
+      u.text         = text;
+      u.repeat       = repeat;
+      u.weekDay      = (repeat === 'weekly')  ? selectedWeekday : null;
+      u.monthDay     = (repeat === 'monthly') ? monthDay        : null;
+      u.weekCat      = weekCat;
+      u.coreCategory = coreCat;
+      return u;
+    });
+  } else {
+    list.push({
+      id: uid(), text: text, repeat: repeat, active: true,
+      weekDay:      (repeat === 'weekly')  ? selectedWeekday : null,
+      monthDay:     (repeat === 'monthly') ? monthDay        : null,
+      weekCat:      weekCat,
+      coreCategory: coreCat
+    });
+  }
+  saveRecurring(list);
+  closeModal('modal-recurring');
+  renderRecurring();
+}
+
+function deleteRecurring(id) {
+  if (!confirm('이 반복 일정을 삭제할까요?')) return;
+  saveRecurring(getRecurring().filter(function(r) { return r.id !== id; }));
+  renderRecurring();
+}
+
+function toggleRecurring(id) {
+  var list = getRecurring().map(function(r) {
+    if (r.id !== id) return r;
+    var u = {}; for (var k in r) u[k] = r[k];
+    u.active = (r.active === false) ? true : false;
+    return u;
+  });
+  saveRecurring(list);
+  renderRecurring();
 }
 
 // 초기 렌더 (Firebase 동기화 후 실행)

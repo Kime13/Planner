@@ -123,28 +123,22 @@ function renderAllTasks() {
     var ccBadge = ccColor ? '<span class="cat-badge" style="background:' + ccColor + '18;color:' + ccColor + '">' + escHtml(t.coreCategory) + '</span>' : '';
 
     if (t.id === editingAllTaskId) {
-      return '<div class="task-item">'
+      return '<div class="task-item task-item--editing">'
         + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleAllTask(\'' + t.id + '\')">'
         + '<input class="task-edit-input" id="ei-' + t.id + '" value="' + escHtml(t.text) + '"'
-        + ' onkeydown="if(event.key===\'Enter\')saveEditAllTask(\'' + t.id + '\');if(event.key===\'Escape\'){editingAllTaskId=null;renderAllTasks();}"'
-        + ' onblur="saveEditAllTask(\'' + t.id + '\')">'
-        + wcBadge + ccBadge
-        + '<button class="btn-danger-sm" onclick="deleteAllTask(\'' + t.id + '\')">×</button>'
+        + ' onkeydown="if(event.key===\'Enter\')saveEditAllTask(\'' + t.id + '\');else if(event.key===\'Escape\')cancelEditAllTask()">'
+        + '<button class="btn-save-sm" onmousedown="event.preventDefault()" onclick="saveEditAllTask(\'' + t.id + '\')">✓</button>'
+        + '<button class="btn-cancel-sm" onmousedown="event.preventDefault()" onclick="cancelEditAllTask()">✕</button>'
         + '</div>';
     }
     return '<div class="task-item' + (t.done ? ' done' : '') + '">'
       + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleAllTask(\'' + t.id + '\')">'
       + '<span class="task-text" onclick="toggleAllTask(\'' + t.id + '\')">' + escHtml(t.text) + '</span>'
       + wcBadge + ccBadge
-      + '<button class="btn-edit-sm" onclick="editingAllTaskId=\'' + t.id + '\';renderAllTasks()">✏</button>'
+      + '<button class="btn-edit-sm" onclick="startEditAllTask(\'' + t.id + '\')">✏</button>'
       + '<button class="btn-danger-sm" onclick="deleteAllTask(\'' + t.id + '\')">×</button>'
       + '</div>';
   }).join('');
-
-  if (editingAllTaskId) {
-    var inp = document.getElementById('ei-' + editingAllTaskId);
-    if (inp) { inp.focus(); inp.select(); }
-  }
 
   updateProgress();
 }
@@ -201,28 +195,23 @@ function renderPriorities() {
 
   document.getElementById('priorities-list').innerHTML = tasks.map(function(t, i) {
     if (t.id === editingPriorityId) {
-      return '<div class="task-item">'
+      return '<div class="task-item task-item--editing">'
         + '<span class="prio-num">' + (i + 1) + '</span>'
         + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="togglePriority(\'' + t.id + '\')">'
         + '<input class="task-edit-input" id="ep-' + t.id + '" value="' + escHtml(t.text) + '"'
-        + ' onkeydown="if(event.key===\'Enter\')saveEditPriority(\'' + t.id + '\');if(event.key===\'Escape\'){editingPriorityId=null;renderPriorities();}"'
-        + ' onblur="saveEditPriority(\'' + t.id + '\')">'
-        + '<button class="btn-danger-sm" onclick="deletePriority(\'' + t.id + '\')">×</button>'
+        + ' onkeydown="if(event.key===\'Enter\')saveEditPriority(\'' + t.id + '\');else if(event.key===\'Escape\')cancelEditPriority()">'
+        + '<button class="btn-save-sm" onmousedown="event.preventDefault()" onclick="saveEditPriority(\'' + t.id + '\')">✓</button>'
+        + '<button class="btn-cancel-sm" onmousedown="event.preventDefault()" onclick="cancelEditPriority()">✕</button>'
         + '</div>';
     }
     return '<div class="task-item' + (t.done ? ' done' : '') + '">'
       + '<span class="prio-num">' + (i + 1) + '</span>'
       + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="togglePriority(\'' + t.id + '\')">'
       + '<span class="task-text" onclick="togglePriority(\'' + t.id + '\')">' + escHtml(t.text) + '</span>'
-      + '<button class="btn-edit-sm" onclick="editingPriorityId=\'' + t.id + '\';renderPriorities()">✏</button>'
+      + '<button class="btn-edit-sm" onclick="startEditPriority(\'' + t.id + '\')">✏</button>'
       + '<button class="btn-danger-sm" onclick="deletePriority(\'' + t.id + '\')">×</button>'
       + '</div>';
   }).join('');
-
-  if (editingPriorityId) {
-    var inp = document.getElementById('ep-' + editingPriorityId);
-    if (inp) { inp.focus(); inp.select(); }
-  }
 
   var addArea = document.getElementById('priority-add-area');
   if (tasks.length < 3) {
@@ -285,26 +274,22 @@ function renderActual() {
   var data = getDayData(dk);
   document.getElementById('actual-list').innerHTML = data.actual.map(function(a) {
     if (a.id === editingActualId) {
-      return '<div class="actual-item">'
+      return '<div class="actual-item task-item--editing">'
         + '<div class="actual-dot"></div>'
         + '<input class="task-edit-input" id="ea-' + a.id + '" value="' + escHtml(a.text) + '"'
-        + ' onkeydown="if(event.key===\'Enter\')saveEditActual(\'' + a.id + '\');if(event.key===\'Escape\'){editingActualId=null;renderActual();}"'
-        + ' onblur="saveEditActual(\'' + a.id + '\')">'
-        + '<button class="btn-danger-sm" onclick="deleteActual(\'' + a.id + '\')">×</button>'
+        + ' onkeydown="if(event.key===\'Enter\')saveEditActual(\'' + a.id + '\');else if(event.key===\'Escape\')cancelEditActual()">'
+        + '<button class="btn-save-sm" onmousedown="event.preventDefault()" onclick="saveEditActual(\'' + a.id + '\')">✓</button>'
+        + '<button class="btn-cancel-sm" onmousedown="event.preventDefault()" onclick="cancelEditActual()">✕</button>'
         + '</div>';
     }
     return '<div class="actual-item">'
       + '<div class="actual-dot"></div>'
       + '<div class="actual-text">' + escHtml(a.text) + '</div>'
-      + '<button class="btn-edit-sm" onclick="editingActualId=\'' + a.id + '\';renderActual()">✏</button>'
+      + '<button class="btn-edit-sm" onclick="startEditActual(\'' + a.id + '\')">✏</button>'
       + '<button class="btn-danger-sm" onclick="deleteActual(\'' + a.id + '\')">×</button>'
       + '</div>';
   }).join('');
 
-  if (editingActualId) {
-    var inp = document.getElementById('ea-' + editingActualId);
-    if (inp) { inp.focus(); inp.select(); }
-  }
 }
 
 function saveEditActual(id) {
@@ -339,8 +324,43 @@ function deleteActual(id) {
   renderActual();
 }
 
+/* ===== 인라인 편집 시작 / 취소 ===== */
+function startEditAllTask(id) {
+  editingAllTaskId = id;
+  renderAllTasks();
+  var inp = document.getElementById('ei-' + id);
+  if (inp) { inp.focus(); inp.select(); }
+}
+function cancelEditAllTask() {
+  editingAllTaskId = null;
+  renderAllTasks();
+}
+
+function startEditPriority(id) {
+  editingPriorityId = id;
+  renderPriorities();
+  var inp = document.getElementById('ep-' + id);
+  if (inp) { inp.focus(); inp.select(); }
+}
+function cancelEditPriority() {
+  editingPriorityId = null;
+  renderPriorities();
+}
+
+function startEditActual(id) {
+  editingActualId = id;
+  renderActual();
+  var inp = document.getElementById('ea-' + id);
+  if (inp) { inp.focus(); inp.select(); }
+}
+function cancelEditActual() {
+  editingActualId = null;
+  renderActual();
+}
+
 // 초기 렌더 (Firebase 동기화 후 실행)
 initSync(function() {
+  injectRecurringTasks(dk);   // 반복 일정 자동 삽입
   buildAddRow();
   updateProgress();
   renderAllTasks();

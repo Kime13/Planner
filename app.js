@@ -6,6 +6,7 @@ var KEYS = {
   monthly:   'planner_monthly',
   weekly:    'planner_weekly',
   daily:     'planner_daily',
+  recurring: 'planner_recurring',
 };
 
 var WEEK_CATS = ['업무', '자기계발', '이직', '타인과의 관계'];
@@ -92,6 +93,56 @@ function escHtml(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/* ---- 반복 일정 ---- */
+function getRecurring() {
+  return JSON.parse(localStorage.getItem(KEYS.recurring)) || [];
+}
+function saveRecurring(data) {
+  localStorage.setItem(KEYS.recurring, JSON.stringify(data));
+  pushSync();
+}
+
+// daily.html 로드 시: 해당 날짜에 맞는 반복 일정을 allTasks에 자동 삽입
+function injectRecurringTasks(dk) {
+  var parts     = dk.split('-');
+  var date      = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+  var dow       = date.getDay() || 7;   // 1=월 … 7=일
+  var dom       = date.getDate();
+  var recurring = getRecurring().filter(function(r) { return r.active !== false; });
+  if (!recurring.length) return;
+
+  var dayData = getDayData(dk);
+  var changed = false;
+
+  recurring.forEach(function(r) {
+    var applies =
+      (r.repeat === 'daily') ||
+      (r.repeat === 'weekly'  && +r.weekDay  === dow) ||
+      (r.repeat === 'monthly' && +r.monthDay === dom);
+    if (!applies) return;
+
+    var already = dayData.allTasks.some(function(t) { return t.recurringId === r.id; });
+    if (already) return;
+
+    dayData.allTasks.push({
+      id:           uid(),
+      text:         r.text,
+      done:         false,
+      weekCat:      r.weekCat      || '',
+      coreCategory: r.coreCategory || '',
+      recurringId:  r.id
+    });
+    changed = true;
+  });
+
+  if (changed) {
+    var all = JSON.parse(localStorage.getItem(KEYS.daily)) || {};
+    all[dk] = dayData;
+    localStorage.setItem(KEYS.daily, JSON.stringify(all));
+    pushSync();
+  }
 }
 
 /* ---- 연간 ---- */
