@@ -186,10 +186,10 @@ function saveAnnual(data) { localStorage.setItem(KEYS.annual, JSON.stringify(dat
 /* ---- 분기 ---- */
 function getQuarterly() {
   return JSON.parse(localStorage.getItem(KEYS.quarterly)) || {
-    Q1: { goal: '나만의 스토리텔링 작성', progress: 80 },
-    Q2: { goal: '이력서 완료 및 면접 연습', progress: 10 },
-    Q3: { goal: '실전 지원', progress: 0 },
-    Q4: { goal: '이직 성공', progress: 0 }
+    Q1: { goal: '', progress: 0 },
+    Q2: { goal: '', progress: 0 },
+    Q3: { goal: '', progress: 0 },
+    Q4: { goal: '', progress: 0 }
   };
 }
 function saveQuarterly(data) { localStorage.setItem(KEYS.quarterly, JSON.stringify(data)); pushSync(); }
