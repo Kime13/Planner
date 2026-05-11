@@ -48,7 +48,14 @@ function initSync(onReady) {
       _updateUserBadge(user);
       if (sameUser) return; // 토큰 갱신 등 동일 사용자 재호출 → 재로딩 불필요
 
-      // Firestore → localStorage → 렌더
+      // 사용자가 바뀌었거나 첫 로그인:
+      // localStorage를 먼저 비워 이전 사용자 데이터나 마이그레이션 대상 로컬 데이터를 제거
+      Object.keys(KEYS).forEach(function(k) {
+        localStorage.removeItem(KEYS[k]);
+      });
+
+      // Firestore → localStorage 캐시 → 렌더
+      // Firestore에 데이터가 없으면(신규 사용자) 빈 상태로 렌더
       _getUserDoc(user.uid).get().then(function(doc) {
         if (doc.exists) {
           var remote = doc.data();
@@ -99,7 +106,8 @@ function signInWithGoogle() {
   });
 }
 
-// 로그아웃
+// 로그아웃: localStorage 캐시만 즉시 초기화 후 signOut
+// (signOut 완료 시 onAuthStateChanged(!user)가 재호출되어 로그인 화면으로 전환)
 function signOutUser() {
   Object.keys(KEYS).forEach(function(k) { localStorage.removeItem(KEYS[k]); });
   firebase.auth().signOut();
