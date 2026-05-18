@@ -996,14 +996,12 @@ function deleteCat(idx) {
 // 초기 렌더 (Firebase Auth → Firestore 로드 후 실행)
 initSync(function() {
   if (typeof refreshCategoryGlobals === 'function') refreshCategoryGlobals();
-  var name = getPlannerName();
-  if (name) {
-    updatePlannerNameUI(name);
+  if (typeof getPlannerName === 'function') {
+    var name = getPlannerName();
+    if (name && typeof updatePlannerNameUI === 'function') updatePlannerNameUI(name);
+    if (!name && typeof openNameModal === 'function') openNameModal(true);
   }
   renderAll();
-  if (!name) {
-    openNameModal(true); // 최초 로그인: 이름 설정 모달
-  }
 });
 </script>
 </body>

@@ -63,18 +63,15 @@
     <div id="priority-add-area"></div>
   </div>
 
-  <!-- 실제로 한 것 -->
+  <!-- 타임 트래커 -->
   <div class="card">
     <div class="card-header">
-      <span class="card-label">✅ 실제로 한 것</span>
+      <span class="card-label">⏱ 타임 트래커</span>
+      <span id="time-total-badge" style="font-size:12px;color:var(--muted);font-weight:600"></span>
     </div>
-    <div id="actual-list"></div>
-    <div class="add-row">
-      <input class="add-input" id="actual-input" type="text"
-             placeholder="오늘 실제로 한 것을 기록해요..."
-             onkeydown="if(event.key==='Enter') addActual()">
-      <button class="btn btn-primary btn-sm" onclick="addActual()">추가</button>
-    </div>
+    <div id="timer-active-area"></div>
+    <div id="timer-start-area"></div>
+    <div id="timer-timeline"></div>
   </div>
 
 </div><!-- /.app -->
@@ -91,7 +88,9 @@ var dk = params.get('date') || dateKey();
 // 현재 편집 중인 항목 ID 추적
 var editingAllTaskId  = null;
 var editingPriorityId = null;
-var editingActualId   = null;
+
+// 타이머 인터벌
+var _timerInterval = null;
 
 document.getElementById('day-date-text').textContent = formatKorDate(dk);
 document.title = formatKorDate(dk) + ' — Chloe\'s Planner';
@@ -290,58 +289,164 @@ function deletePriority(id) {
   renderPriorities();
 }
 
-/* ===== 실제로 한 것 ===== */
-function renderActual() {
-  var data = getDayData(dk);
-  document.getElementById('actual-list').innerHTML = data.actual.map(function(a) {
-    if (a.id === editingActualId) {
-      return '<div class="actual-item task-item--editing">'
-        + '<div class="actual-dot"></div>'
-        + '<input class="task-edit-input" id="ea-' + a.id + '" value="' + escHtml(a.text) + '"'
-        + ' onkeydown="if(event.key===\'Enter\')saveEditActual(\'' + a.id + '\');else if(event.key===\'Escape\')cancelEditActual()">'
-        + '<button class="btn-save-sm" onmousedown="event.preventDefault()" onclick="saveEditActual(\'' + a.id + '\')">✓</button>'
-        + '<button class="btn-cancel-sm" onmousedown="event.preventDefault()" onclick="cancelEditActual()">✕</button>'
-        + '</div>';
-    }
-    return '<div class="actual-item">'
-      + '<div class="actual-dot"></div>'
-      + '<div class="actual-text task-text--editable" onclick="startEditActual(\'' + a.id + '\')">' + escHtml(a.text) + '</div>'
-      + '<button class="btn-danger-sm" onclick="deleteActual(\'' + a.id + '\')">×</button>'
-      + '</div>';
-  }).join('');
+/* ===== 타임 트래커 ===== */
 
+function _fmtHHMM(dateObj) {
+  return pad(dateObj.getHours()) + ':' + pad(dateObj.getMinutes());
 }
 
-function saveEditActual(id) {
-  if (editingActualId !== id) return;
-  var inp = document.getElementById('ea-' + id);
-  if (!inp) return;
-  var newText = inp.value.trim();
-  editingActualId = null;
-  if (newText) {
-    var data = getDayData(dk);
-    data.actual.forEach(function(a){ if (a.id === id) a.text = newText; });
-    saveDayData(dk, data);
+function _fmtDuration(totalMinutes) {
+  if (!totalMinutes || totalMinutes < 1) return '1분 미만';
+  if (totalMinutes < 60) return totalMinutes + '분';
+  var h = Math.floor(totalMinutes / 60);
+  var m = totalMinutes % 60;
+  return h + '시간' + (m ? ' ' + m + '분' : '');
+}
+
+function _fmtElapsed(totalSeconds) {
+  var h = Math.floor(totalSeconds / 3600);
+  var m = Math.floor((totalSeconds % 3600) / 60);
+  var s = totalSeconds % 60;
+  if (h > 0) return pad(h) + ':' + pad(m) + ':' + pad(s);
+  return pad(m) + ':' + pad(s);
+}
+
+function _getActiveEntry() {
+  var entries = getDayData(dk).actual || [];
+  for (var i = 0; i < entries.length; i++) {
+    if (!entries[i].endTime) return entries[i];
   }
-  renderActual();
+  return null;
 }
 
-function addActual() {
-  var input = document.getElementById('actual-input');
-  var text  = input.value.trim();
-  if (!text) return;
+function startTimer() {
+  var input = document.getElementById('timer-input');
+  var text  = input ? input.value.trim() : '';
+  if (!text) { if (input) input.focus(); return; }
+
+  if (_getActiveEntry()) stopTimer();
+
   var data = getDayData(dk);
-  data.actual.push({ id: uid(), text: text });
+  if (!data.actual) data.actual = [];
+  data.actual.push({
+    id: uid(), text: text,
+    startTime: new Date().toISOString(),
+    endTime: null, duration: 0
+  });
   saveDayData(dk, data);
   input.value = '';
-  renderActual();
+  renderTimeTracker();
 }
 
-function deleteActual(id) {
+function stopTimer() {
   var data = getDayData(dk);
-  data.actual = data.actual.filter(function(a){ return a.id !== id; });
+  var now  = new Date();
+  var changed = false;
+  (data.actual || []).forEach(function(a) {
+    if (!a.endTime) {
+      a.endTime  = now.toISOString();
+      a.duration = Math.max(1, Math.round((now - new Date(a.startTime)) / 60000));
+      changed = true;
+    }
+  });
+  if (changed) saveDayData(dk, data);
+  clearInterval(_timerInterval);
+  _timerInterval = null;
+  renderTimeTracker();
+}
+
+function _startTimerTick() {
+  clearInterval(_timerInterval);
+  _timerInterval = setInterval(function() {
+    var el     = document.getElementById('timer-elapsed');
+    var active = _getActiveEntry();
+    if (!el || !active) { clearInterval(_timerInterval); return; }
+    var elapsed = Math.floor((Date.now() - new Date(active.startTime)) / 1000);
+    el.textContent = _fmtElapsed(elapsed);
+  }, 1000);
+}
+
+function deleteTimeEntry(id) {
+  var data = getDayData(dk);
+  data.actual = (data.actual || []).filter(function(a){ return a.id !== id; });
   saveDayData(dk, data);
-  renderActual();
+  renderTimeTracker();
+}
+
+function renderTimeTracker() {
+  var data      = getDayData(dk);
+  var entries   = data.actual || [];
+  var active    = entries.find(function(a){ return !a.endTime; });
+  var completed = entries.filter(function(a){ return !!a.endTime; });
+  var totalMin  = completed.reduce(function(s, a){ return s + (a.duration || 0); }, 0);
+
+  /* ── 활성 타이머 ── */
+  var activeEl = document.getElementById('timer-active-area');
+  if (active) {
+    var elapsed    = Math.floor((Date.now() - new Date(active.startTime)) / 1000);
+    var startLabel = _fmtHHMM(new Date(active.startTime)) + ' 시작';
+    activeEl.innerHTML =
+      '<div class="timer-active-card">'
+      + '<div class="timer-pulse"></div>'
+      + '<div class="timer-active-info">'
+      +   '<div class="timer-active-name">' + escHtml(active.text) + '</div>'
+      +   '<div class="timer-active-since">' + startLabel + '</div>'
+      +   '<div class="timer-active-elapsed" id="timer-elapsed">' + _fmtElapsed(elapsed) + '</div>'
+      + '</div>'
+      + '<button class="btn-stop" onclick="stopTimer()">■ 종료</button>'
+      + '</div>';
+    _startTimerTick();
+  } else {
+    activeEl.innerHTML = '';
+  }
+
+  /* ── 시작 입력창 (타이머 없을 때만) ── */
+  var startEl = document.getElementById('timer-start-area');
+  if (!active) {
+    startEl.innerHTML =
+      '<div class="add-row">'
+      + '<input class="add-input" id="timer-input" type="text" placeholder="무엇을 할 건가요?"'
+      + ' onkeydown="if(event.key===\'Enter\') startTimer()">'
+      + '<button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="startTimer()">▶ 시작</button>'
+      + '</div>';
+  } else {
+    startEl.innerHTML = '';
+  }
+
+  /* ── 타임라인 ── */
+  var timelineEl = document.getElementById('timer-timeline');
+  if (completed.length) {
+    timelineEl.innerHTML =
+      '<div class="timeline">'
+      + completed.map(function(a) {
+          var s = new Date(a.startTime);
+          var e = new Date(a.endTime);
+          return '<div class="timeline-entry">'
+            + '<div class="timeline-entry-body">'
+            +   '<div class="timeline-entry-name">' + escHtml(a.text) + '</div>'
+            +   '<div class="timeline-entry-meta">'
+            +     '<span class="time-chip">' + _fmtHHMM(s) + ' → ' + _fmtHHMM(e) + '</span>'
+            +     '<span class="duration-chip">' + _fmtDuration(a.duration) + '</span>'
+            +   '</div>'
+            + '</div>'
+            + '<button class="btn-danger-sm" onclick="deleteTimeEntry(\'' + a.id + '\')">×</button>'
+            + '</div>';
+        }).join('')
+      + '</div>'
+      + '<div class="timer-total-row">'
+      +   '<span class="timer-total-label">🕐 오늘 총 집중시간</span>'
+      +   '<span class="timer-total-value">' + _fmtDuration(totalMin) + '</span>'
+      + '</div>';
+  } else if (!active) {
+    timelineEl.innerHTML =
+      '<div class="no-timer-msg">아직 기록된 활동이 없어요 🕐<br>위에서 타이머를 시작해 보세요!</div>';
+  } else {
+    timelineEl.innerHTML = '';
+  }
+
+  /* ── 상단 배지 ── */
+  var badge = document.getElementById('time-total-badge');
+  if (badge) badge.textContent = totalMin > 0 ? '오늘 ' + _fmtDuration(totalMin) : '';
 }
 
 /* ===== 인라인 편집 시작 / 취소 ===== */
@@ -367,35 +472,26 @@ function cancelEditPriority() {
   renderPriorities();
 }
 
-function startEditActual(id) {
-  editingActualId = id;
-  renderActual();
-  var inp = document.getElementById('ea-' + id);
-  if (inp) { inp.focus(); inp.select(); }
-}
-function cancelEditActual() {
-  editingActualId = null;
-  renderActual();
-}
 
-// 초기 렌더 (Firebase Auth → Firestore 로드 후 실행)
+// 초기 렌더
 initSync(function() {
-  if (typeof refreshCategoryGlobals === 'function') refreshCategoryGlobals(); // 커스텀 카테고리 적용
-
-  // 플래너 이름 반영
-  var pName = getPlannerName();
-  if (pName) {
-    var backLink = document.getElementById('planner-back-link');
-    if (backLink) backLink.innerHTML = '&#8592; ' + escHtml(pName);
-    document.title = formatKorDate(dk) + ' — ' + pName;
+  if (typeof refreshCategoryGlobals === 'function') refreshCategoryGlobals();
+  if (typeof getPlannerName        === 'function') {
+    var pName = getPlannerName();
+    if (pName) {
+      var backLink = document.getElementById('planner-back-link');
+      if (backLink) backLink.innerHTML = '&#8592; ' + escHtml(pName);
+      document.title = formatKorDate(dk) + ' — ' + pName;
+    }
   }
+  if (typeof injectRecurringTasks === 'function') injectRecurringTasks(dk);
 
-  injectRecurringTasks(dk);     // 반복 일정 자동 삽입
   buildAddRow();
   updateProgress();
   renderAllTasks();
   renderPriorities();
-  renderActual();
+  renderTimeTracker();
+  if (_getActiveEntry()) _startTimerTick();
 });
 </script>
 </body>

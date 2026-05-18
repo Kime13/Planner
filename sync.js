@@ -1,4 +1,4 @@
-// ===== Firebase Auth + Firestore 동기화 레이어 =====
+// ===== Firebase 동기화 레이어 (로그인 선택, 앱은 항상 즉시 표시) =====
 
 var FIREBASE_CONFIG = {
   apiKey:            "AIzaSyBOcYba_emFZKSwcAu-rYuADVHt_bUmbqM",
@@ -9,78 +9,75 @@ var FIREBASE_CONFIG = {
   appId:             "1:250165850330:web:f8df7047905cc9d95bf5e3"
 };
 
-var _db            = null;
-var _onReadyFn     = null;
-var _currentUser   = null;
-var _currentUserId = null;
-var _syncTimer     = null;
+var _db          = null;
+var _syncTimer   = null;
+var _currentUser = null;
 
-// 사용자별 Firestore 문서 참조
-function _getUserDoc(uid) {
-  return _db.collection('users').doc(uid).collection('planner').doc('data');
-}
-
+/* ─────────────────────────────────────────
+   initSync(onReady)
+   · 앱을 즉시 표시하고 onReady() 호출
+   · Firebase 초기화에 성공하면 백그라운드에서 인증 감지
+   · 로그인 상태면 Firestore 데이터로 localStorage 덮어쓰고 재렌더
+───────────────────────────────────────── */
 function initSync(onReady) {
-  _onReadyFn = onReady;
+  // 1) 앱 즉시 표시 — 로그인 없이도 항상 사용 가능
+  _showApp();
+
+  // 2) localStorage 데이터로 일단 렌더
+  if (onReady) onReady();
+
+  // 3) Firebase 초기화 (실패해도 앱에는 영향 없음)
   try {
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-    // _db는 아래 onAuthStateChanged 안에서 인증 확인 후 초기화 (pre-auth Firestore 접근 방지)
+    _db = firebase.firestore();
 
     firebase.auth().onAuthStateChanged(function(user) {
       _currentUser = user;
-
-      if (!user) {
-        // 로그아웃: 로컬 캐시 초기화 → 로그인 화면
-        _currentUserId = null;
-        Object.keys(KEYS).forEach(function(k) {
-          localStorage.removeItem(KEYS[k]);
-        });
-        _showLoginScreen();
-        return;
-      }
-
-      // 인증 확인 후 Firestore 클라이언트를 처음 한 번만 초기화
-      if (!_db) _db = firebase.firestore();
-
-      var sameUser = (_currentUserId === user.uid);
-      _currentUserId = user.uid;
-      _hideLoginScreen();
       _updateUserBadge(user);
-      if (sameUser) return; // 토큰 갱신 등 동일 사용자 재호출 → 재로딩 불필요
 
-      // 사용자가 바뀌었거나 첫 로그인:
-      // localStorage를 먼저 비워 이전 사용자 데이터나 마이그레이션 대상 로컬 데이터를 제거
-      Object.keys(KEYS).forEach(function(k) {
-        localStorage.removeItem(KEYS[k]);
-      });
+      if (!user) return; // 비로그인 → localStorage만 사용, 렌더 다시 안 함
 
-      // Firestore → localStorage 캐시 → 렌더
-      // Firestore에 데이터가 없으면(신규 사용자) 빈 상태로 렌더
+      // 로그인 성공 → Firestore에서 최신 데이터 가져와 덮어쓰기
       _getUserDoc(user.uid).get().then(function(doc) {
-        if (doc.exists) {
-          var remote = doc.data();
-          Object.keys(KEYS).forEach(function(k) {
-            var key = KEYS[k];
-            if (remote[key] !== undefined) {
-              localStorage.setItem(key, JSON.stringify(remote[key]));
+        if (!doc.exists) return; // 신규 사용자 → 현재 localStorage 그대로 유지
+        var remote    = doc.data();
+        var hasChange = false;
+        Object.keys(KEYS).forEach(function(k) {
+          var key = KEYS[k];
+          if (remote[key] !== undefined) {
+            var localRaw = localStorage.getItem(key);
+            var remoteStr = JSON.stringify(remote[key]);
+            if (localRaw !== remoteStr) {
+              localStorage.setItem(key, remoteStr);
+              hasChange = true;
             }
-          });
+          }
+        });
+        // 원격 데이터가 로컬과 다르면 화면 갱신
+        if (hasChange && typeof renderAll === 'function') renderAll();
+        else if (hasChange) {
+          // daily.html 환경
+          if (typeof renderAllTasks  === 'function') renderAllTasks();
+          if (typeof renderPriorities === 'function') renderPriorities();
+          if (typeof renderTimeTracker === 'function') renderTimeTracker();
+          if (typeof updateProgress === 'function') updateProgress();
         }
-        if (_onReadyFn) _onReadyFn();
       }).catch(function(err) {
         console.warn('Firestore 로드 실패:', err.message);
-        if (_onReadyFn) _onReadyFn();
       });
     });
 
   } catch(e) {
-    console.warn('Firebase 초기화 실패:', e.message);
-    _hideLoginScreen();
-    if (onReady) onReady();
+    console.warn('Firebase 초기화 실패 (오프라인 모드):', e.message);
   }
 }
 
-// 모든 데이터를 사용자 Firestore 문서에 push (debounce 500ms)
+/* ─── Firestore 문서 참조 ─── */
+function _getUserDoc(uid) {
+  return _db.collection('users').doc(uid).collection('planner').doc('data');
+}
+
+/* ─── 데이터 저장 시 Firestore에도 push (debounce 500ms) ─── */
 function pushSync() {
   if (!_currentUser || !_db) return;
   clearTimeout(_syncTimer);
@@ -96,45 +93,51 @@ function pushSync() {
   }, 500);
 }
 
-// Google 팝업 로그인
+/* ─── Google 로그인 / 로그아웃 ─── */
 function signInWithGoogle() {
-  var errEl = document.getElementById('login-error');
+  var errEl = document.getElementById('sync-error');
   if (errEl) errEl.textContent = '';
   var provider = new firebase.auth.GoogleAuthProvider();
   firebase.auth().signInWithPopup(provider).catch(function(err) {
-    if (errEl) errEl.textContent = '로그인 실패: ' + err.message;
+    var msg = err.code === 'auth/popup-blocked'
+      ? '팝업이 차단됐어요. 브라우저에서 팝업을 허용해 주세요.'
+      : '로그인 실패: ' + err.message;
+    if (errEl) errEl.textContent = msg;
+    else alert(msg);
   });
 }
 
-// 로그아웃: localStorage 캐시만 즉시 초기화 후 signOut
-// (signOut 완료 시 onAuthStateChanged(!user)가 재호출되어 로그인 화면으로 전환)
 function signOutUser() {
-  Object.keys(KEYS).forEach(function(k) { localStorage.removeItem(KEYS[k]); });
-  firebase.auth().signOut();
+  if (firebase.auth) firebase.auth().signOut();
 }
 
-function _showLoginScreen() {
-  var el = document.getElementById('login-screen');
-  if (el) el.style.display = 'flex';
-  var app = document.querySelector('.app');
-  if (app) app.style.display = 'none';
-}
-
-function _hideLoginScreen() {
-  var el = document.getElementById('login-screen');
-  if (el) el.style.display = 'none';
-  var app = document.querySelector('.app');
-  if (app) app.style.display = '';
-}
-
+/* ─── 사용자 배지 업데이트 (로그인/비로그인 모두 처리) ─── */
 function _updateUserBadge(user) {
   var badge = document.getElementById('user-badge');
-  if (!badge || !user) return;
+  if (!badge) return;
+  if (!user) {
+    // 비로그인: 작은 "동기화" 버튼
+    badge.innerHTML =
+      '<button class="btn btn-ghost btn-sm" onclick="signInWithGoogle()" '
+      + 'style="font-size:11px;padding:5px 10px;gap:4px">'
+      + '<span>☁</span> 동기화 로그인</button>'
+      + '<span id="sync-error" style="font-size:11px;color:var(--danger);margin-left:6px"></span>';
+    return;
+  }
   var name = user.displayName || user.email || '';
   badge.innerHTML =
     (user.photoURL
       ? '<img src="' + user.photoURL + '" alt="" class="user-avatar">'
-      : '<div class="user-avatar user-avatar--initial">' + escHtml(name.charAt(0).toUpperCase() || '?') + '</div>')
+      : '<div class="user-avatar user-avatar--initial">'
+        + escHtml((name.charAt(0) || '?').toUpperCase()) + '</div>')
     + '<span class="user-name">' + escHtml(name) + '</span>'
     + '<button class="btn btn-ghost btn-sm" onclick="signOutUser()">로그아웃</button>';
+}
+
+/* ─── 앱 표시 (login-screen 숨기고 .app 보이기) ─── */
+function _showApp() {
+  var loginEl = document.getElementById('login-screen');
+  if (loginEl) loginEl.style.display = 'none';
+  var app = document.querySelector('.app');
+  if (app) app.style.display = '';
 }
