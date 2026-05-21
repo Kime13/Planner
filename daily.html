@@ -124,7 +124,7 @@ function buildAddRow() {
     + '<select class="add-select" id="day-weekcat-select">' + weekOptions + '</select>'
     + '<select class="add-select" id="day-corecat-select">' + coreOptions + '</select>'
     + '<input class="add-input" id="all-tasks-input" type="text" placeholder="할 일 추가..."'
-    + ' onkeydown="if(event.key===\'Enter\') addAllTask()" style="flex:1;min-width:120px">'
+    + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing) addAllTask()" style="flex:1;min-width:120px">'
     + '<button class="btn btn-primary btn-sm" onclick="addAllTask()">추가</button>'
     + '</div>';
 }
@@ -148,7 +148,7 @@ function renderAllTasks() {
       return '<div class="task-item task-item--editing">'
         + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleAllTask(\'' + t.id + '\')">'
         + '<input class="task-edit-input" id="ei-' + t.id + '" value="' + escHtml(t.text) + '"'
-        + ' onkeydown="if(event.key===\'Enter\')saveEditAllTask(\'' + t.id + '\');else if(event.key===\'Escape\')cancelEditAllTask()">'
+        + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing)saveEditAllTask(\'' + t.id + '\');else if(event.key===\'Escape\')cancelEditAllTask()">'
         + '<button class="btn-save-sm" onmousedown="event.preventDefault()" onclick="saveEditAllTask(\'' + t.id + '\')">✓</button>'
         + '<button class="btn-cancel-sm" onmousedown="event.preventDefault()" onclick="cancelEditAllTask()">✕</button>'
         + '</div>';
@@ -220,7 +220,7 @@ function renderPriorities() {
         + '<span class="prio-num">' + (i + 1) + '</span>'
         + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="togglePriority(\'' + t.id + '\')">'
         + '<input class="task-edit-input" id="ep-' + t.id + '" value="' + escHtml(t.text) + '"'
-        + ' onkeydown="if(event.key===\'Enter\')saveEditPriority(\'' + t.id + '\');else if(event.key===\'Escape\')cancelEditPriority()">'
+        + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing)saveEditPriority(\'' + t.id + '\');else if(event.key===\'Escape\')cancelEditPriority()">'
         + '<button class="btn-save-sm" onmousedown="event.preventDefault()" onclick="saveEditPriority(\'' + t.id + '\')">✓</button>'
         + '<button class="btn-cancel-sm" onmousedown="event.preventDefault()" onclick="cancelEditPriority()">✕</button>'
         + '</div>';
@@ -239,7 +239,7 @@ function renderPriorities() {
       '<div class="add-row">'
       + '<input class="add-input" id="prio-input" type="text"'
       + ' placeholder="우선순위 ' + (tasks.length + 1) + '번 입력..."'
-      + ' onkeydown="if(event.key===\'Enter\') addPriority()">'
+      + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing) addPriority()">'
       + '<button class="btn btn-primary btn-sm" onclick="addPriority()">추가</button>'
       + '</div>';
   } else {
@@ -406,7 +406,7 @@ function renderTimeTracker() {
     startEl.innerHTML =
       '<div class="add-row">'
       + '<input class="add-input" id="timer-input" type="text" placeholder="무엇을 할 건가요?"'
-      + ' onkeydown="if(event.key===\'Enter\') startTimer()">'
+      + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing) startTimer()">'
       + '<button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="startTimer()">▶ 시작</button>'
       + '</div>';
   } else {
