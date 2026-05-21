@@ -37,28 +37,66 @@ function initSync(onReady) {
 
       if (!user) return; // 비로그인 → localStorage만 사용, 렌더 다시 안 함
 
-      // 로그인 성공 → Firestore에서 최신 데이터 가져와 덮어쓰기
+      // 로그인 성공 → Firestore에서 최신 데이터 가져와 병합
       _getUserDoc(user.uid).get().then(function(doc) {
-        if (!doc.exists) return; // 신규 사용자 → 현재 localStorage 그대로 유지
+        if (!doc.exists) return; // 신규 사용자 → localStorage 그대로 유지
         var remote    = doc.data();
         var hasChange = false;
+
         Object.keys(KEYS).forEach(function(k) {
-          var key = KEYS[k];
-          if (remote[key] !== undefined) {
-            var localRaw = localStorage.getItem(key);
-            var remoteStr = JSON.stringify(remote[key]);
-            if (localRaw !== remoteStr) {
-              localStorage.setItem(key, remoteStr);
+          var key      = KEYS[k];
+          var localRaw = localStorage.getItem(key);
+
+          if (remote[key] === undefined) return; // Firestore에 없으면 로컬 유지
+
+          // ── 반복 일정: 병합 (로컬+원격 합집합, 덮어쓰기 금지) ──
+          if (key === KEYS.recurring) {
+            var localArr  = JSON.parse(localRaw || '[]');
+            var remoteArr = remote[key] || [];
+            var remoteIds = {};
+            remoteArr.forEach(function(r){ remoteIds[r.id] = true; });
+            // 로컬에만 있는 항목은 원격 배열에 추가
+            localArr.forEach(function(r){
+              if (!remoteIds[r.id]) remoteArr.push(r);
+            });
+            var mergedStr = JSON.stringify(remoteArr);
+            if (localRaw !== mergedStr) {
+              localStorage.setItem(key, mergedStr);
               hasChange = true;
             }
+            return;
+          }
+
+          // ── 매일 데이터: 오늘 날짜는 로컬 우선 보존 ──
+          if (key === KEYS.daily && typeof dk !== 'undefined') {
+            var localDaily  = JSON.parse(localRaw || '{}');
+            var remoteDaily = remote[key] || {};
+            // 원격 기준으로 시작하되, 오늘 날짜는 로컬 데이터 유지
+            var merged = JSON.parse(JSON.stringify(remoteDaily));
+            if (localDaily[dk] !== undefined) merged[dk] = localDaily[dk];
+            var mergedStr2 = JSON.stringify(merged);
+            if (localRaw !== mergedStr2) {
+              localStorage.setItem(key, mergedStr2);
+              hasChange = true;
+            }
+            return;
+          }
+
+          // ── 나머지 키: 원격으로 덮어쓰기 ──
+          var remoteStr = JSON.stringify(remote[key]);
+          if (localRaw !== remoteStr) {
+            localStorage.setItem(key, remoteStr);
+            hasChange = true;
           }
         });
-        // 원격 데이터가 로컬과 다르면 화면 갱신
+
+        // 반복 일정 재삽입 (항상 실행, 위 병합 이후)
+        if (typeof injectRecurringTasks === 'function' && typeof dk !== 'undefined') {
+          injectRecurringTasks(dk);
+        }
+
+        // 화면 갱신
         if (hasChange) {
-          // daily.html: Firestore 덮어쓴 후 반복 일정 재삽입 (덮어쓰기로 사라지는 문제 방지)
-          if (typeof injectRecurringTasks === 'function' && typeof dk !== 'undefined') {
-            injectRecurringTasks(dk);
-          }
           if (typeof renderAll === 'function') {
             renderAll();
           } else {
