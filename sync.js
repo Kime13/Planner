@@ -54,13 +54,19 @@ function initSync(onReady) {
           }
         });
         // 원격 데이터가 로컬과 다르면 화면 갱신
-        if (hasChange && typeof renderAll === 'function') renderAll();
-        else if (hasChange) {
-          // daily.html 환경
-          if (typeof renderAllTasks  === 'function') renderAllTasks();
-          if (typeof renderPriorities === 'function') renderPriorities();
-          if (typeof renderTimeTracker === 'function') renderTimeTracker();
-          if (typeof updateProgress === 'function') updateProgress();
+        if (hasChange) {
+          // daily.html: Firestore 덮어쓴 후 반복 일정 재삽입 (덮어쓰기로 사라지는 문제 방지)
+          if (typeof injectRecurringTasks === 'function' && typeof dk !== 'undefined') {
+            injectRecurringTasks(dk);
+          }
+          if (typeof renderAll === 'function') {
+            renderAll();
+          } else {
+            if (typeof renderAllTasks    === 'function') renderAllTasks();
+            if (typeof renderPriorities  === 'function') renderPriorities();
+            if (typeof renderTimeTracker === 'function') renderTimeTracker();
+            if (typeof updateProgress    === 'function') updateProgress();
+          }
         }
       }).catch(function(err) {
         console.warn('Firestore 로드 실패:', err.message);
