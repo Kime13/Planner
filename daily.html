@@ -296,6 +296,46 @@ function _fmtHHMM(dateObj) {
   return pad(dateObj.getHours()) + ':' + pad(dateObj.getMinutes());
 }
 
+/* 오전/오후 12시간제로 분해 */
+function _dateToAmPmParts(dateObj) {
+  var h24 = dateObj.getHours();
+  var m   = dateObj.getMinutes();
+  var ampm = h24 < 12 ? '오전' : '오후';
+  var h12  = h24 % 12;
+  if (h12 === 0) h12 = 12;
+  return { h: h12, m: m, ampm: ampm };
+}
+
+/* 시작/종료 셀렉트 HTML 생성 (prefix = 'te-s' or 'te-e') */
+function _buildTimeSelects(prefix, id, dateObj) {
+  var pt = _dateToAmPmParts(dateObj);
+  var hourOpts = '';
+  for (var h = 1; h <= 12; h++) {
+    hourOpts += '<option value="' + h + '"' + (h === pt.h ? ' selected' : '') + '>' + h + '</option>';
+  }
+  var minOpts = '';
+  for (var m = 0; m <= 59; m++) {
+    minOpts += '<option value="' + m + '"' + (m === pt.m ? ' selected' : '') + '>' + pad(m) + '</option>';
+  }
+  var ampmOpts = ['오전', '오후'].map(function(ap) {
+    return '<option value="' + ap + '"' + (ap === pt.ampm ? ' selected' : '') + '>' + ap + '</option>';
+  }).join('');
+  var p = prefix + id;
+  return '<select class="time-select" id="' + p + '-ap">' + ampmOpts + '</select>'
+       + '<select class="time-select" id="' + p + '-h">' + hourOpts + '</select>'
+       + '<span class="time-select-colon">:</span>'
+       + '<select class="time-select time-select--min" id="' + p + '-m">' + minOpts + '</select>';
+}
+
+/* 셀렉트에서 24시간 Date 복원 */
+function _readTimeFromSelects(prefix, id) {
+  var ampm = document.getElementById(prefix + id + '-ap').value;
+  var h12  = parseInt(document.getElementById(prefix + id + '-h').value);
+  var m    = parseInt(document.getElementById(prefix + id + '-m').value);
+  var h24  = ampm === '오전' ? (h12 === 12 ? 0 : h12) : (h12 === 12 ? 12 : h12 + 12);
+  return new Date(dk + 'T' + pad(h24) + ':' + pad(m) + ':00');
+}
+
 function _fmtDuration(totalMinutes) {
   if (!totalMinutes || totalMinutes < 1) return '1분 미만';
   if (totalMinutes < 60) return totalMinutes + '분';
@@ -427,13 +467,13 @@ function renderTimeTracker() {
             return '<div class="timeline-entry timeline-entry--editing">'
               + '<div class="timeline-edit-form">'
               +   '<input class="task-edit-input" id="te-text-' + a.id + '" value="' + escHtml(a.text) + '"'
-              +   ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing)saveEditTimeEntry(\'' + a.id + '\');else if(event.key===\'Escape\')cancelEditTimeEntry()">'
+              +   ' onkeydown="if(event.key===\'Escape\')cancelEditTimeEntry()">'
               +   '<div class="timeline-edit-times">'
-              +     '<label class="timeline-edit-time-label"><span>시작</span>'
-              +       '<input type="time" id="te-start-' + a.id + '" value="' + _fmtHHMM(s) + '" class="timeline-time-input"></label>'
+              +     '<span class="timeline-edit-time-label">시작</span>'
+              +     _buildTimeSelects('te-s', a.id, s)
               +     '<span class="timeline-edit-arrow">→</span>'
-              +     '<label class="timeline-edit-time-label"><span>종료</span>'
-              +       '<input type="time" id="te-end-' + a.id + '" value="' + _fmtHHMM(e) + '" class="timeline-time-input"></label>'
+              +     '<span class="timeline-edit-time-label">종료</span>'
+              +     _buildTimeSelects('te-e', a.id, e)
               +   '</div>'
               +   '<div class="timeline-edit-btns">'
               +     '<button class="btn-save-sm" onmousedown="event.preventDefault()" onclick="saveEditTimeEntry(\'' + a.id + '\')">✓ 저장</button>'
@@ -509,22 +549,17 @@ function cancelEditTimeEntry() {
 
 function saveEditTimeEntry(id) {
   if (editingTimeEntryId !== id) return;
-  var textInp  = document.getElementById('te-text-' + id);
-  var startInp = document.getElementById('te-start-' + id);
-  var endInp   = document.getElementById('te-end-' + id);
-  if (!textInp || !startInp || !endInp) return;
-
-  var newText  = textInp.value.trim();
-  var startVal = startInp.value;
-  var endVal   = endInp.value;
+  var textInp = document.getElementById('te-text-' + id);
+  if (!textInp) return;
+  var newText = textInp.value.trim();
 
   editingTimeEntryId = null;
 
-  if (!newText || !startVal || !endVal) { renderTimeTracker(); return; }
+  if (!newText) { renderTimeTracker(); return; }
 
-  var startDate = new Date(dk + 'T' + startVal + ':00');
-  var endDate   = new Date(dk + 'T' + endVal   + ':00');
-  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate <= startDate) {
+  var startDate = _readTimeFromSelects('te-s', id);
+  var endDate   = _readTimeFromSelects('te-e', id);
+  if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate <= startDate) {
     renderTimeTracker(); return;
   }
 
