@@ -86,8 +86,9 @@ var params = new URLSearchParams(window.location.search);
 var dk = params.get('date') || dateKey();
 
 // 현재 편집 중인 항목 ID 추적
-var editingAllTaskId  = null;
-var editingPriorityId = null;
+var editingAllTaskId    = null;
+var editingPriorityId   = null;
+var editingTimeEntryId  = null;
 
 // 타이머 인터벌
 var _timerInterval = null;
@@ -421,7 +422,28 @@ function renderTimeTracker() {
       + completed.map(function(a) {
           var s = new Date(a.startTime);
           var e = new Date(a.endTime);
-          return '<div class="timeline-entry">'
+
+          if (a.id === editingTimeEntryId) {
+            return '<div class="timeline-entry timeline-entry--editing">'
+              + '<div class="timeline-edit-form">'
+              +   '<input class="task-edit-input" id="te-text-' + a.id + '" value="' + escHtml(a.text) + '"'
+              +   ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing)saveEditTimeEntry(\'' + a.id + '\');else if(event.key===\'Escape\')cancelEditTimeEntry()">'
+              +   '<div class="timeline-edit-times">'
+              +     '<label class="timeline-edit-time-label"><span>시작</span>'
+              +       '<input type="time" id="te-start-' + a.id + '" value="' + _fmtHHMM(s) + '" class="timeline-time-input"></label>'
+              +     '<span class="timeline-edit-arrow">→</span>'
+              +     '<label class="timeline-edit-time-label"><span>종료</span>'
+              +       '<input type="time" id="te-end-' + a.id + '" value="' + _fmtHHMM(e) + '" class="timeline-time-input"></label>'
+              +   '</div>'
+              +   '<div class="timeline-edit-btns">'
+              +     '<button class="btn-save-sm" onmousedown="event.preventDefault()" onclick="saveEditTimeEntry(\'' + a.id + '\')">✓ 저장</button>'
+              +     '<button class="btn-cancel-sm" onmousedown="event.preventDefault()" onclick="cancelEditTimeEntry()">✕ 취소</button>'
+              +   '</div>'
+              + '</div>'
+              + '</div>';
+          }
+
+          return '<div class="timeline-entry timeline-entry--editable" onclick="startEditTimeEntry(\'' + a.id + '\')">'
             + '<div class="timeline-entry-body">'
             +   '<div class="timeline-entry-name">' + escHtml(a.text) + '</div>'
             +   '<div class="timeline-entry-meta">'
@@ -429,7 +451,7 @@ function renderTimeTracker() {
             +     '<span class="duration-chip">' + _fmtDuration(a.duration) + '</span>'
             +   '</div>'
             + '</div>'
-            + '<button class="btn-danger-sm" onclick="deleteTimeEntry(\'' + a.id + '\')">×</button>'
+            + '<button class="btn-danger-sm" onclick="event.stopPropagation();deleteTimeEntry(\'' + a.id + '\')">×</button>'
             + '</div>';
         }).join('')
       + '</div>'
@@ -472,6 +494,52 @@ function cancelEditPriority() {
   renderPriorities();
 }
 
+/* ===== 타임 트래커 항목 편집 ===== */
+function startEditTimeEntry(id) {
+  editingTimeEntryId = id;
+  renderTimeTracker();
+  var inp = document.getElementById('te-text-' + id);
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+function cancelEditTimeEntry() {
+  editingTimeEntryId = null;
+  renderTimeTracker();
+}
+
+function saveEditTimeEntry(id) {
+  if (editingTimeEntryId !== id) return;
+  var textInp  = document.getElementById('te-text-' + id);
+  var startInp = document.getElementById('te-start-' + id);
+  var endInp   = document.getElementById('te-end-' + id);
+  if (!textInp || !startInp || !endInp) return;
+
+  var newText  = textInp.value.trim();
+  var startVal = startInp.value;
+  var endVal   = endInp.value;
+
+  editingTimeEntryId = null;
+
+  if (!newText || !startVal || !endVal) { renderTimeTracker(); return; }
+
+  var startDate = new Date(dk + 'T' + startVal + ':00');
+  var endDate   = new Date(dk + 'T' + endVal   + ':00');
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate <= startDate) {
+    renderTimeTracker(); return;
+  }
+
+  var data = getDayData(dk);
+  (data.actual || []).forEach(function(a) {
+    if (a.id === id) {
+      a.text      = newText;
+      a.startTime = startDate.toISOString();
+      a.endTime   = endDate.toISOString();
+      a.duration  = Math.max(1, Math.round((endDate - startDate) / 60000));
+    }
+  });
+  saveDayData(dk, data);
+  renderTimeTracker();
+}
 
 // 초기 렌더
 initSync(function() {
