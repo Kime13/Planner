@@ -1,7 +1,8 @@
 // ===== Firebase 동기화 레이어 =====
 // · 앱은 항상 즉시 표시 (로그인 불필요)
 // · 로그인 시 onSnapshot 실시간 리스너 — 어느 기기에서 바꿔도 즉시 반영
-// · hasPendingWrites 필터로 로컬 쓰기가 재트리거하는 무한루프 방지
+// · hasPendingWrites + fromCache 필터로 루프 방지 및 캐시 오적용 방지
+// · 오류/백그라운드 복귀 시 리스너 자동 재연결
 
 var FIREBASE_CONFIG = {
   apiKey:            "AIzaSyBOcYba_emFZKSwcAu-rYuADVHt_bUmbqM",
@@ -16,6 +17,7 @@ var _db             = null;
 var _syncTimer      = null;
 var _currentUser    = null;
 var _unsubSnapshot  = null;   // onSnapshot 해제 함수
+var _retryTimer     = null;   // 재연결 타이머
 
 /* ─────────────────────────────────────────
    initSync(onReady)
@@ -34,27 +36,51 @@ function initSync(onReady) {
 
       // 로그아웃: 기존 리스너 해제
       if (_unsubSnapshot) { _unsubSnapshot(); _unsubSnapshot = null; }
+      if (_retryTimer)    { clearTimeout(_retryTimer); _retryTimer = null; }
       if (!user) return;
 
       // 로그인: 실시간 리스너 등록
-      _unsubSnapshot = _getUserDoc(user.uid).onSnapshot(
-        { includeMetadataChanges: true },
-        function(doc) {
-          // 이 기기에서 쓴 데이터가 서버에 반영되는 이벤트 → 무시 (무한루프 방지)
-          if (doc.metadata.hasPendingWrites) return;
-          if (!doc.exists) return;
+      _subscribeSnapshot(user.uid);
+    });
 
-          _applyRemoteData(doc.data());
-        },
-        function(err) {
-          console.warn('Firestore 리스너 오류:', err.message);
-        }
-      );
+    // 탭/앱이 백그라운드에서 포그라운드로 복귀할 때 리스너 재확인
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden && _currentUser) {
+        _subscribeSnapshot(_currentUser.uid);
+      }
     });
 
   } catch(e) {
     console.warn('Firebase 초기화 실패 (오프라인 모드):', e.message);
   }
+}
+
+/* ─── onSnapshot 구독 (재연결 포함) ─── */
+function _subscribeSnapshot(uid) {
+  // 기존 리스너 해제 후 새로 등록
+  if (_unsubSnapshot) { _unsubSnapshot(); _unsubSnapshot = null; }
+  if (_retryTimer)    { clearTimeout(_retryTimer); _retryTimer = null; }
+
+  _unsubSnapshot = _getUserDoc(uid).onSnapshot(
+    { includeMetadataChanges: true },
+    function(doc) {
+      // ① 이 기기에서 방금 쓴 데이터 → 무시 (무한루프 방지)
+      if (doc.metadata.hasPendingWrites) return;
+      // ② 로컬 캐시에서 온 데이터 → 무시 (서버 응답만 적용)
+      if (doc.metadata.fromCache) return;
+      if (!doc.exists) return;
+
+      _applyRemoteData(doc.data());
+    },
+    function(err) {
+      console.warn('Firestore 리스너 오류, 5초 후 재연결:', err.message);
+      _unsubSnapshot = null;
+      // 5초 후 자동 재연결
+      _retryTimer = setTimeout(function() {
+        if (_currentUser) _subscribeSnapshot(_currentUser.uid);
+      }, 5000);
+    }
+  );
 }
 
 /* ─── Firestore 데이터를 localStorage에 반영 후 화면 갱신 ─── */
