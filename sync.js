@@ -1,4 +1,7 @@
-// ===== Firebase 동기화 레이어 (로그인 선택, 앱은 항상 즉시 표시) =====
+// ===== Firebase 동기화 레이어 =====
+// · 앱은 항상 즉시 표시 (로그인 불필요)
+// · 로그인 시 onSnapshot 실시간 리스너 — 어느 기기에서 바꿔도 즉시 반영
+// · hasPendingWrites 필터로 로컬 쓰기가 재트리거하는 무한루프 방지
 
 var FIREBASE_CONFIG = {
   apiKey:            "AIzaSyBOcYba_emFZKSwcAu-rYuADVHt_bUmbqM",
@@ -9,24 +12,18 @@ var FIREBASE_CONFIG = {
   appId:             "1:250165850330:web:f8df7047905cc9d95bf5e3"
 };
 
-var _db          = null;
-var _syncTimer   = null;
-var _currentUser = null;
+var _db             = null;
+var _syncTimer      = null;
+var _currentUser    = null;
+var _unsubSnapshot  = null;   // onSnapshot 해제 함수
 
 /* ─────────────────────────────────────────
    initSync(onReady)
-   · 앱을 즉시 표시하고 onReady() 호출
-   · Firebase 초기화에 성공하면 백그라운드에서 인증 감지
-   · 로그인 상태면 Firestore 데이터로 localStorage 덮어쓰고 재렌더
 ───────────────────────────────────────── */
 function initSync(onReady) {
-  // 1) 앱 즉시 표시 — 로그인 없이도 항상 사용 가능
   _showApp();
-
-  // 2) localStorage 데이터로 일단 렌더
   if (onReady) onReady();
 
-  // 3) Firebase 초기화 (실패해도 앱에는 영향 없음)
   try {
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     _db = firebase.firestore();
@@ -35,84 +32,85 @@ function initSync(onReady) {
       _currentUser = user;
       _updateUserBadge(user);
 
-      if (!user) return; // 비로그인 → localStorage만 사용, 렌더 다시 안 함
+      // 로그아웃: 기존 리스너 해제
+      if (_unsubSnapshot) { _unsubSnapshot(); _unsubSnapshot = null; }
+      if (!user) return;
 
-      // 로그인 성공 → Firestore에서 최신 데이터 가져와 병합
-      _getUserDoc(user.uid).get().then(function(doc) {
-        if (!doc.exists) return; // 신규 사용자 → localStorage 그대로 유지
-        var remote    = doc.data();
-        var hasChange = false;
+      // 로그인: 실시간 리스너 등록
+      _unsubSnapshot = _getUserDoc(user.uid).onSnapshot(
+        { includeMetadataChanges: true },
+        function(doc) {
+          // 이 기기에서 쓴 데이터가 서버에 반영되는 이벤트 → 무시 (무한루프 방지)
+          if (doc.metadata.hasPendingWrites) return;
+          if (!doc.exists) return;
 
-        Object.keys(KEYS).forEach(function(k) {
-          var key      = KEYS[k];
-          var localRaw = localStorage.getItem(key);
-
-          if (remote[key] === undefined) return; // Firestore에 없으면 로컬 유지
-
-          // ── 반복 일정: 병합 (로컬+원격 합집합, 덮어쓰기 금지) ──
-          if (key === KEYS.recurring) {
-            var localArr  = JSON.parse(localRaw || '[]');
-            var remoteArr = remote[key] || [];
-            var remoteIds = {};
-            remoteArr.forEach(function(r){ remoteIds[r.id] = true; });
-            // 로컬에만 있는 항목은 원격 배열에 추가
-            localArr.forEach(function(r){
-              if (!remoteIds[r.id]) remoteArr.push(r);
-            });
-            var mergedStr = JSON.stringify(remoteArr);
-            if (localRaw !== mergedStr) {
-              localStorage.setItem(key, mergedStr);
-              hasChange = true;
-            }
-            return;
-          }
-
-          // ── 매일 데이터: 오늘 날짜는 로컬 우선 보존 ──
-          if (key === KEYS.daily && typeof dk !== 'undefined') {
-            var localDaily  = JSON.parse(localRaw || '{}');
-            var remoteDaily = remote[key] || {};
-            // 원격 기준으로 시작하되, 오늘 날짜는 로컬 데이터 유지
-            var merged = JSON.parse(JSON.stringify(remoteDaily));
-            if (localDaily[dk] !== undefined) merged[dk] = localDaily[dk];
-            var mergedStr2 = JSON.stringify(merged);
-            if (localRaw !== mergedStr2) {
-              localStorage.setItem(key, mergedStr2);
-              hasChange = true;
-            }
-            return;
-          }
-
-          // ── 나머지 키: 원격으로 덮어쓰기 ──
-          var remoteStr = JSON.stringify(remote[key]);
-          if (localRaw !== remoteStr) {
-            localStorage.setItem(key, remoteStr);
-            hasChange = true;
-          }
-        });
-
-        // 반복 일정 재삽입 (항상 실행, 위 병합 이후)
-        if (typeof injectRecurringTasks === 'function' && typeof dk !== 'undefined') {
-          injectRecurringTasks(dk);
+          _applyRemoteData(doc.data());
+        },
+        function(err) {
+          console.warn('Firestore 리스너 오류:', err.message);
         }
-
-        // 화면 갱신
-        if (hasChange) {
-          if (typeof renderAll === 'function') {
-            renderAll();
-          } else {
-            if (typeof renderAllTasks    === 'function') renderAllTasks();
-            if (typeof renderPriorities  === 'function') renderPriorities();
-            if (typeof renderTimeTracker === 'function') renderTimeTracker();
-            if (typeof updateProgress    === 'function') updateProgress();
-          }
-        }
-      }).catch(function(err) {
-        console.warn('Firestore 로드 실패:', err.message);
-      });
+      );
     });
 
   } catch(e) {
     console.warn('Firebase 초기화 실패 (오프라인 모드):', e.message);
+  }
+}
+
+/* ─── Firestore 데이터를 localStorage에 반영 후 화면 갱신 ─── */
+function _applyRemoteData(remote) {
+  var hasChange = false;
+
+  Object.keys(KEYS).forEach(function(k) {
+    var key      = KEYS[k];
+    var localRaw = localStorage.getItem(key);
+
+    if (remote[key] === undefined) return; // Firestore에 없으면 로컬 유지
+
+    // ── 반복 일정: 로컬+원격 합집합 병합 (어느 쪽도 잃지 않음) ──
+    if (key === KEYS.recurring) {
+      var localArr  = JSON.parse(localRaw || '[]');
+      var remoteArr = JSON.parse(JSON.stringify(remote[key] || []));
+      var remoteIds = {};
+      remoteArr.forEach(function(r){ remoteIds[r.id] = true; });
+      localArr.forEach(function(r){
+        if (!remoteIds[r.id]) remoteArr.push(r);
+      });
+      var mergedStr = JSON.stringify(remoteArr);
+      if (localRaw !== mergedStr) {
+        localStorage.setItem(key, mergedStr);
+        hasChange = true;
+      }
+      return;
+    }
+
+    // ── 나머지 키: 원격으로 덮어쓰기 ──
+    var remoteStr = JSON.stringify(remote[key]);
+    if (localRaw !== remoteStr) {
+      localStorage.setItem(key, remoteStr);
+      hasChange = true;
+    }
+  });
+
+  // 반복 일정 재삽입 — 덮어쓰기 후에도 항상 보장
+  if (typeof injectRecurringTasks === 'function' && typeof dk !== 'undefined') {
+    injectRecurringTasks(dk);
+  }
+
+  // 화면 갱신
+  if (hasChange) {
+    if (typeof renderAll === 'function') {
+      renderAll();
+    } else {
+      if (typeof renderAllTasks    === 'function') renderAllTasks();
+      if (typeof renderPriorities  === 'function') renderPriorities();
+      if (typeof renderTimeTracker === 'function') renderTimeTracker();
+      if (typeof updateProgress    === 'function') updateProgress();
+      // 진행 중인 타이머 틱 복원
+      if (typeof _getActiveEntry === 'function' && typeof _startTimerTick === 'function') {
+        if (_getActiveEntry()) _startTimerTick();
+      }
+    }
   }
 }
 
@@ -152,15 +150,15 @@ function signInWithGoogle() {
 }
 
 function signOutUser() {
+  if (_unsubSnapshot) { _unsubSnapshot(); _unsubSnapshot = null; }
   if (firebase.auth) firebase.auth().signOut();
 }
 
-/* ─── 사용자 배지 업데이트 (로그인/비로그인 모두 처리) ─── */
+/* ─── 사용자 배지 ─── */
 function _updateUserBadge(user) {
   var badge = document.getElementById('user-badge');
   if (!badge) return;
   if (!user) {
-    // 비로그인: 작은 "동기화" 버튼
     badge.innerHTML =
       '<button class="btn btn-ghost btn-sm" onclick="signInWithGoogle()" '
       + 'style="font-size:11px;padding:5px 10px;gap:4px">'
@@ -178,7 +176,7 @@ function _updateUserBadge(user) {
     + '<button class="btn btn-ghost btn-sm" onclick="signOutUser()">로그아웃</button>';
 }
 
-/* ─── 앱 표시 (login-screen 숨기고 .app 보이기) ─── */
+/* ─── 앱 표시 ─── */
 function _showApp() {
   var loginEl = document.getElementById('login-screen');
   if (loginEl) loginEl.style.display = 'none';
