@@ -117,6 +117,18 @@
     <div id="recurring-list"></div>
   </div>
 
+  <!-- 나의 나침반 (비전 레이어 — 연 1회 검토) -->
+  <div class="card vision-card">
+    <div class="card-header">
+      <span class="card-label">🧭 나의 나침반</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:var(--muted)">연 1회 검토</span>
+        <button class="btn btn-edit" onclick="openVisionModal()">편집</button>
+      </div>
+    </div>
+    <div id="vision-content"></div>
+  </div>
+
   <!-- 기본 설정 -->
   <div class="card">
     <div class="card-header">
@@ -271,6 +283,35 @@
   </div>
 </div>
 
+<!-- ===== 모달: 나의 나침반 편집 ===== -->
+<div class="modal-overlay" id="modal-vision" style="display:none" onclick="closeIfOverlay(event,'modal-vision')">
+  <div class="modal">
+    <div class="modal-title">🧭 나의 나침반 편집</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.6">
+      방향을 잃지 않게 해줄 장기 목표입니다.<br>
+      진척도 계산과 무관하며, 연 1회 정도 검토합니다.
+    </p>
+    <div class="form-group">
+      <label class="form-label">
+        최종의 목표
+        <span style="font-weight:400;color:var(--muted);font-size:11px;margin-left:4px">언젠가 이루고 싶은 단 하나</span>
+      </label>
+      <textarea class="textarea" id="input-final-goal" rows="3" placeholder="예: 내가 가진 기술로 세상의 공공 문제를 해결하는 PM이 되기"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">
+        5년의 목표
+        <span style="font-weight:400;color:var(--muted);font-size:11px;margin-left:4px">최종 목표를 향한 5년 내 하나</span>
+      </label>
+      <textarea class="textarea" id="input-5year-goal" rows="3" placeholder="예: GovTech PM으로 해외 취업, 연봉 20% 인상"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-vision')">취소</button>
+      <button class="btn btn-primary" onclick="saveVisionModal()">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 모달: 플래너 이름 설정 ===== -->
 <div class="modal-overlay" id="modal-planner-name" style="display:none" onclick="closeIfOverlay(event,'modal-planner-name')">
   <div class="modal" style="text-align:center;max-width:400px">
@@ -343,7 +384,52 @@ function renderAll() {
   renderWeekly();
   renderCalendar();
   renderRecurring();
+  renderVision();
   renderCategoryList();
+}
+
+/* ===== 비전 (나의 나침반) ===== */
+function renderVision() {
+  var v  = getVision();
+  var el = document.getElementById('vision-content');
+  if (!el) return;
+  if (!v.finalGoal && !v.fiveYearGoal) {
+    el.innerHTML = '<p class="vision-empty">아직 나침반이 없어요. 편집 버튼으로 장기 방향성을 기록해 보세요.</p>';
+    return;
+  }
+  var html = '';
+  if (v.finalGoal) {
+    html += '<div class="vision-item">'
+      + '<div class="vision-item-label">최종의 목표</div>'
+      + '<div class="vision-item-text">' + escHtml(v.finalGoal) + '</div>'
+      + '</div>';
+  }
+  if (v.fiveYearGoal) {
+    html += '<div class="vision-item">'
+      + '<div class="vision-item-label">5년의 목표</div>'
+      + '<div class="vision-item-text">' + escHtml(v.fiveYearGoal) + '</div>'
+      + '</div>';
+  }
+  el.innerHTML = html;
+}
+
+function openVisionModal() {
+  var v = getVision();
+  document.getElementById('input-final-goal').value  = v.finalGoal;
+  document.getElementById('input-5year-goal').value  = v.fiveYearGoal;
+  document.getElementById('modal-vision').style.display = 'flex';
+  setTimeout(function() {
+    document.getElementById('input-final-goal').focus();
+  }, 80);
+}
+
+function saveVisionModal() {
+  saveVision({
+    finalGoal:    document.getElementById('input-final-goal').value.trim(),
+    fiveYearGoal: document.getElementById('input-5year-goal').value.trim()
+  });
+  closeModal('modal-vision');
+  renderVision();
 }
 
 /* ===== 핵심목표 진척도 + 오늘 달성률 ===== */

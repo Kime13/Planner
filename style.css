@@ -738,6 +738,26 @@ body {
   .timeline-edit-btns .btn-cancel-sm { flex: 1; padding: 11px; text-align: center; font-size: 14px; }
 }
 
+/* ===== 비전 카드 (나의 나침반) ===== */
+.vision-card {
+  border: 1.5px dashed var(--border);
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+.vision-empty {
+  font-size: 13px; color: var(--muted);
+  font-style: italic; line-height: 1.65; padding: 2px 0;
+}
+.vision-item { margin-bottom: 14px; }
+.vision-item:last-child { margin-bottom: 0; }
+.vision-item-label {
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px;
+}
+.vision-item-text {
+  font-size: 14px; font-weight: 500; color: var(--text);
+  line-height: 1.65; white-space: pre-wrap;
+}
+
 /* ===== 로그인 화면 ===== */
 #login-screen {
   position: fixed; inset: 0;

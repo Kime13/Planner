@@ -1,6 +1,7 @@
 // ===== 플래너 데이터 레이어 =====
 
 var KEYS = {
+  vision:    'planner_vision',
   annual:    'planner_annual',
   quarterly: 'planner_quarterly',
   monthly:   'planner_monthly',
@@ -171,6 +172,15 @@ function injectRecurringTasks(dk) {
     localStorage.setItem(KEYS.daily, JSON.stringify(all));
     pushSync();
   }
+}
+
+/* ---- 비전 (Layer 0 — 나의 나침반) ---- */
+function getVision() {
+  return JSON.parse(localStorage.getItem(KEYS.vision)) || { finalGoal: '', fiveYearGoal: '' };
+}
+function saveVision(data) {
+  localStorage.setItem(KEYS.vision, JSON.stringify(data));
+  pushSync();
 }
 
 /* ---- 연간 ---- */
