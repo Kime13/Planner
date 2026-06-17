@@ -37,6 +37,16 @@
     </div>
   </header>
 
+  <!-- 핵심목표 진척도 + 오늘 달성률 -->
+  <div class="card" id="core-progress-card">
+    <div class="card-header">
+      <span class="card-label">🎯 핵심목표 진척도</span>
+      <span id="core-progress-month-label" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div id="core-progress-section"></div>
+    <div id="today-progress-section"></div>
+  </div>
+
   <!-- 연간 카드 -->
   <div class="card annual-card">
     <div class="card-header">
@@ -326,6 +336,7 @@ document.getElementById('month-label').textContent = (today.getMonth()+1) + '월
 
 /* ===== 전체 렌더 ===== */
 function renderAll() {
+  renderCoreProgress();
   renderAnnual();
   renderQuarterly();
   renderMonthly();
@@ -333,6 +344,76 @@ function renderAll() {
   renderCalendar();
   renderRecurring();
   renderCategoryList();
+}
+
+/* ===== 핵심목표 진척도 + 오늘 달성률 ===== */
+function renderCoreProgress() {
+  var annual    = getAnnual();
+  var cores     = annual.coreActions.filter(function(a){ return a.trim(); });
+  var mGoals    = getMonthGoals(curMonthKey);
+  var section   = document.getElementById('core-progress-section');
+  var todaySec  = document.getElementById('today-progress-section');
+
+  document.getElementById('core-progress-month-label').textContent =
+    (today.getMonth() + 1) + '월 기준';
+
+  if (!cores.length) {
+    section.innerHTML =
+      '<p style="font-size:13px;color:var(--muted);font-style:italic">연간 핵심목표를 먼저 설정해주세요.</p>';
+    todaySec.innerHTML = '';
+    return;
+  }
+
+  var html = '';
+
+  /* ── 1번째 핵심목표: 크게 ── */
+  var c0   = cores[0];
+  var col0 = CORE_COLORS[0] || '#6366f1';
+  var pct0 = calcMonthCoreCategoryProgress(c0, curMonthKey);
+  var gt0  = mGoals.coreGoals[c0] || '';
+
+  html += '<div class="core-feat" style="border-left:4px solid ' + col0 + '">'
+    + '<div class="core-feat-top">'
+    +   '<div style="min-width:0">'
+    +     '<div class="core-feat-name">' + escHtml(c0) + '</div>'
+    +     (gt0 ? '<div class="core-feat-goal-text">' + escHtml(gt0) + '</div>' : '')
+    +   '</div>'
+    +   '<div class="core-feat-pct" style="color:' + col0 + '">' + pct0 + '%</div>'
+    + '</div>'
+    + '<div class="core-feat-track">'
+    +   '<div class="core-feat-fill" style="width:' + pct0 + '%;background:' + col0 + '"></div>'
+    + '</div>'
+    + '</div>';
+
+  /* ── 나머지 핵심목표: 작게 ── */
+  if (cores.length > 1) {
+    html += '<div class="core-sub-list">';
+    for (var i = 1; i < cores.length; i++) {
+      var c   = cores[i];
+      var col = CORE_COLORS[i] || '#6366f1';
+      var pct = calcMonthCoreCategoryProgress(c, curMonthKey);
+      html += '<div class="core-sub-row">'
+        + '<span class="core-sub-tag" style="background:' + col + '18;color:' + col + '">' + escHtml(c) + '</span>'
+        + '<div class="core-sub-track"><div class="core-sub-fill" style="width:' + pct + '%;background:' + col + '"></div></div>'
+        + '<span class="core-sub-pct" style="color:' + col + '">' + pct + '%</span>'
+        + '</div>';
+    }
+    html += '</div>';
+  }
+
+  section.innerHTML = html;
+
+  /* ── 오늘 달성률 ── */
+  var todayPct = calcDayProgress(todayKey);
+  var t = '<div class="today-prog-wrap"><span class="today-prog-label">📅 오늘 달성률</span>';
+  if (todayPct !== null) {
+    t += '<div class="today-prog-bar"><div class="today-prog-fill" style="width:' + todayPct + '%"></div></div>'
+      + '<span class="today-prog-num">' + todayPct + '%</span>';
+  } else {
+    t += '<span class="today-prog-empty">오늘 할일 없음</span>';
+  }
+  t += '</div>';
+  todaySec.innerHTML = t;
 }
 
 /* ===== 연간 ===== */

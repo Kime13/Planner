@@ -33,6 +33,12 @@
     <div class="user-badge" id="user-badge"></div>
   </div>
 
+  <!-- 핵심목표 미완료 경고 배너 -->
+  <div id="core-warning-banner" class="core-warning-banner" style="display:none">
+    <span class="core-warning-icon">⚠️</span>
+    <span id="core-warning-text">핵심 목표 관련 작업이 남아 있습니다</span>
+  </div>
+
   <!-- 날짜 헤더 + 달성률 링 -->
   <div class="day-hero">
     <div class="day-hero-left">
@@ -96,6 +102,25 @@ var _timerInterval = null;
 document.getElementById('day-date-text').textContent = formatKorDate(dk);
 document.title = formatKorDate(dk) + ' — Chloe\'s Planner';
 
+/* ===== 핵심목표 미완료 경고 ===== */
+function updateCoreWarning() {
+  var data       = getDayData(dk);
+  var incomplete = (data.allTasks || []).filter(function(t) {
+    return t.coreCategory && !t.done;
+  });
+  var banner = document.getElementById('core-warning-banner');
+  var textEl = document.getElementById('core-warning-text');
+  if (!banner) return;
+  if (incomplete.length) {
+    var names = incomplete.slice(0, 2).map(function(t){ return escHtml(t.text); }).join(', ');
+    var extra = incomplete.length > 2 ? ' 외 ' + (incomplete.length - 2) + '건' : '';
+    textEl.innerHTML = '핵심 목표 관련 작업이 남아 있습니다 — ' + names + extra;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
 /* ===== 달성률 ===== */
 function updateProgress() {
   var pct = calcDayProgress(dk);
@@ -137,6 +162,7 @@ function renderAllTasks() {
   var done   = tasks.filter(function(t){ return t.done; }).length;
   var annual = getAnnual();
   document.getElementById('all-tasks-count').textContent = done + ' / ' + tasks.length + ' 완료';
+  updateCoreWarning();
 
   document.getElementById('all-tasks-list').innerHTML = tasks.map(function(t) {
     var wcColor = t.weekCat ? (WEEKCAT_COLORS[t.weekCat] || '#6366f1') : null;

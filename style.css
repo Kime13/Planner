@@ -859,6 +859,71 @@ body {
 }
 .btn-toggle-sm:hover { color: var(--warning); background: #fef9c3; }
 
+/* ===== 핵심목표 진척도 섹션 ===== */
+.core-feat {
+  background: var(--bg); border-radius: var(--radius-sm);
+  padding: 16px; margin-bottom: 14px;
+}
+.core-feat-top {
+  display: flex; justify-content: space-between;
+  align-items: flex-start; gap: 12px; margin-bottom: 12px;
+}
+.core-feat-name { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.core-feat-goal-text { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
+.core-feat-pct {
+  font-size: 34px; font-weight: 800; line-height: 1;
+  white-space: nowrap; flex-shrink: 0;
+}
+.core-feat-track { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
+.core-feat-fill  { height: 100%; border-radius: 5px; transition: width .7s ease; }
+
+.core-sub-list { display: flex; flex-direction: column; gap: 9px; margin-top: 2px; }
+.core-sub-row { display: flex; align-items: center; gap: 10px; }
+.core-sub-tag {
+  font-size: 12px; font-weight: 600;
+  padding: 3px 9px; border-radius: 10px;
+  white-space: nowrap; min-width: 60px;
+  text-align: center; flex-shrink: 0;
+}
+.core-sub-track { flex: 1; height: 7px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.core-sub-fill   { height: 100%; border-radius: 4px; transition: width .7s ease; }
+.core-sub-pct {
+  font-size: 13px; font-weight: 700;
+  min-width: 38px; text-align: right; flex-shrink: 0;
+}
+
+/* 오늘 달성률 (카드 하단) */
+.today-prog-wrap {
+  display: flex; align-items: center; gap: 10px;
+  padding-top: 12px; margin-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.today-prog-label { font-size: 12px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+.today-prog-bar {
+  flex: 1; height: 6px; background: var(--border);
+  border-radius: 3px; overflow: hidden;
+}
+.today-prog-fill {
+  height: 100%; background: var(--primary);
+  border-radius: 3px; transition: width .6s ease;
+}
+.today-prog-num {
+  font-size: 13px; font-weight: 700; color: var(--primary);
+  min-width: 38px; text-align: right; flex-shrink: 0;
+}
+.today-prog-empty { font-size: 12px; color: var(--muted); font-style: italic; }
+
+/* 핵심목표 미완료 경고 배너 (daily.html) */
+.core-warning-banner {
+  display: flex; align-items: flex-start; gap: 8px;
+  background: #fffbeb; border: 1.5px solid #fcd34d;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px; margin-bottom: 14px;
+  font-size: 13px; font-weight: 600; color: #92400e;
+  line-height: 1.45;
+}
+.core-warning-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+
 /* ===== 반응형 ===== */
 @media (max-width: 720px) {
   .quarterly-grid { grid-template-columns: repeat(2, 1fr); }
