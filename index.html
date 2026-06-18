@@ -435,7 +435,7 @@ function saveVisionModal() {
 /* ===== 핵심목표 진척도 + 오늘 달성률 ===== */
 function renderCoreProgress() {
   var annual    = getAnnual();
-  var cores     = annual.coreActions.filter(function(a){ return a.trim(); });
+  var cores     = annual.coreActions.filter(function(a){ return a.name && a.name.trim(); });
   var mGoals    = getMonthGoals(curMonthKey);
   var section   = document.getElementById('core-progress-section');
   var todaySec  = document.getElementById('today-progress-section');
@@ -456,12 +456,12 @@ function renderCoreProgress() {
   var c0   = cores[0];
   var col0 = CORE_COLORS[0] || '#6366f1';
   var pct0 = calcMonthCoreCategoryProgress(c0, curMonthKey);
-  var gt0  = mGoals.coreGoals[c0] || '';
+  var gt0  = mGoals.coreGoals[c0.id] || '';
 
   html += '<div class="core-feat" style="border-left:4px solid ' + col0 + '">'
     + '<div class="core-feat-top">'
     +   '<div style="min-width:0">'
-    +     '<div class="core-feat-name">' + escHtml(c0) + '</div>'
+    +     '<div class="core-feat-name">' + escHtml(c0.name) + '</div>'
     +     (gt0 ? '<div class="core-feat-goal-text">' + escHtml(gt0) + '</div>' : '')
     +   '</div>'
     +   '<div class="core-feat-pct" style="color:' + col0 + '">' + pct0 + '%</div>'
@@ -479,7 +479,7 @@ function renderCoreProgress() {
       var col = CORE_COLORS[i] || '#6366f1';
       var pct = calcMonthCoreCategoryProgress(c, curMonthKey);
       html += '<div class="core-sub-row">'
-        + '<span class="core-sub-tag" style="background:' + col + '18;color:' + col + '">' + escHtml(c) + '</span>'
+        + '<span class="core-sub-tag" style="background:' + col + '18;color:' + col + '">' + escHtml(c.name) + '</span>'
         + '<div class="core-sub-track"><div class="core-sub-fill" style="width:' + pct + '%;background:' + col + '"></div></div>'
         + '<span class="core-sub-pct" style="color:' + col + '">' + pct + '%</span>'
         + '</div>';
@@ -518,9 +518,9 @@ function renderAnnual() {
     goalEl.style.fontStyle = 'italic';
   }
   document.getElementById('core-actions').innerHTML = d.coreActions
-    .filter(function(a){ return a.trim(); })
+    .filter(function(a){ return a.name && a.name.trim(); })
     .map(function(a, i){
-      return '<span class="core-pill" style="background:rgba(255,255,255,.18)">' + escHtml(a) + '</span>';
+      return '<span class="core-pill" style="background:rgba(255,255,255,.18)">' + escHtml(a.name) + '</span>';
     }).join('');
 }
 
@@ -548,7 +548,7 @@ function renderQuarterly() {
 function renderMonthly() {
   var annual = getAnnual();
   var goals  = getMonthGoals(curMonthKey);
-  var cores  = annual.coreActions.filter(function(a){ return a.trim(); });
+  var cores  = annual.coreActions.filter(function(a){ return a.name && a.name.trim(); });
 
   if (!cores.length) {
     document.getElementById('month-core-goals').innerHTML =
@@ -559,11 +559,11 @@ function renderMonthly() {
   document.getElementById('month-core-goals').innerHTML = cores.map(function(a, i) {
     var color   = CORE_COLORS[i] || '#6366f1';
     var bgColor = color + '18';
-    var goalTxt = goals.coreGoals[a] || '';
+    var goalTxt = goals.coreGoals[a.id] || '';
     var pct     = calcMonthCoreCategoryProgress(a, curMonthKey);
     return '<div class="core-goal-item">'
       + '<div class="core-goal-header">'
-      + '<span class="core-goal-tag" style="background:' + bgColor + ';color:' + color + '">' + escHtml(a) + '</span>'
+      + '<span class="core-goal-tag" style="background:' + bgColor + ';color:' + color + '">' + escHtml(a.name) + '</span>'
       + '<span class="core-goal-pct" style="color:' + color + '">' + pct + '%</span>'
       + '</div>'
       + (goalTxt
@@ -655,26 +655,27 @@ function closeIfOverlay(e, id) { if (e.target === e.currentTarget) closeModal(id
 function openAnnualModal() {
   var d = getAnnual();
   document.getElementById('input-annual-goal').value = d.goal;
-  document.getElementById('input-core1').value = d.coreActions[0] || '';
-  document.getElementById('input-core2').value = d.coreActions[1] || '';
-  document.getElementById('input-core3').value = d.coreActions[2] || '';
+  document.getElementById('input-core1').value = d.coreActions[0].name || '';
+  document.getElementById('input-core2').value = d.coreActions[1].name || '';
+  document.getElementById('input-core3').value = d.coreActions[2].name || '';
   document.getElementById('slider-annual').value = d.progress;
   document.getElementById('annual-pct-val').textContent = d.progress + '%';
   document.getElementById('modal-annual').style.display = 'flex';
 }
 function saveAnnualModal() {
+  var d = getAnnual();
   saveAnnual({
     goal: document.getElementById('input-annual-goal').value.trim(),
     coreActions: [
-      document.getElementById('input-core1').value.trim(),
-      document.getElementById('input-core2').value.trim(),
-      document.getElementById('input-core3').value.trim(),
+      { id: d.coreActions[0].id, name: document.getElementById('input-core1').value.trim(), desc: d.coreActions[0].desc || '' },
+      { id: d.coreActions[1].id, name: document.getElementById('input-core2').value.trim(), desc: d.coreActions[1].desc || '' },
+      { id: d.coreActions[2].id, name: document.getElementById('input-core3').value.trim(), desc: d.coreActions[2].desc || '' }
     ],
     progress: +document.getElementById('slider-annual').value
   });
   closeModal('modal-annual');
   renderAnnual();
-  renderMonthly(); // 핵심목표 변경시 월간도 갱신
+  renderMonthly();
 }
 
 /* ===== 분기 모달 ===== */
@@ -722,17 +723,17 @@ function saveQuarterlyModal() {
 function openMonthModal() {
   var annual = getAnnual();
   var goals  = getMonthGoals(curMonthKey);
-  var cores  = annual.coreActions.filter(function(a){ return a.trim(); });
+  var cores  = annual.coreActions.filter(function(a){ return a.name && a.name.trim(); });
 
   document.getElementById('month-modal-title').textContent =
     (today.getMonth() + 1) + '월 목표 편집';
 
   document.getElementById('month-modal-form').innerHTML = cores.map(function(a, i) {
     var color = CORE_COLORS[i] || '#6366f1';
-    var val   = escHtml(goals.coreGoals[a] || '');
+    var val   = escHtml(goals.coreGoals[a.id] || '');
     return '<div class="form-group">'
-      + '<label class="form-label" style="color:' + color + '">' + escHtml(a) + '</label>'
-      + '<textarea class="textarea month-goal-input" data-core="' + escHtml(a) + '" rows="2" placeholder="' + escHtml(a) + ' 관련 이번달 목표...">' + val + '</textarea>'
+      + '<label class="form-label" style="color:' + color + '">' + escHtml(a.name) + '</label>'
+      + '<textarea class="textarea month-goal-input" data-core="' + escHtml(a.id) + '" rows="2" placeholder="' + escHtml(a.name) + ' 관련 이번달 목표...">' + val + '</textarea>'
       + '</div>';
   }).join('');
 
@@ -781,15 +782,16 @@ function renderWeekModalBody() {
   var data   = getWeekData(viewWeekKey);
   var tasks  = data[weekModalCat] || [];
   var annual = getAnnual();
-  var cores  = annual.coreActions.filter(function(a){ return a.trim(); });
+  var cores  = annual.coreActions.filter(function(a){ return a.name && a.name.trim(); });
 
   var coreOptions = '<option value="">핵심목표 없음</option>'
     + cores.map(function(a){
-        return '<option value="' + escHtml(a) + '">' + escHtml(a) + '</option>';
+        return '<option value="' + escHtml(a.name) + '">' + escHtml(a.name) + '</option>';
       }).join('');
 
   var taskHtml = tasks.map(function(t) {
-    var coreIdx = cores.indexOf(t.coreCategory);
+    var coreIdx = cores.findIndex ? cores.findIndex(function(a){ return a.name === t.coreCategory; })
+      : (function(){ for(var _i=0;_i<cores.length;_i++){ if(cores[_i].name===t.coreCategory) return _i; } return -1; })();
     var color   = coreIdx >= 0 ? CORE_COLORS[coreIdx] : null;
     var badge   = (t.coreCategory && color)
       ? '<span class="cat-badge" style="background:' + color + '18;color:' + color + '">' + escHtml(t.coreCategory) + '</span>'
@@ -959,8 +961,8 @@ function openRecurringModal(editId) {
   // 핵심목표 옵션
   document.getElementById('recurring-corecat-select').innerHTML =
     '<option value="">없음</option>'
-    + annual.coreActions.filter(function(a) { return a.trim(); }).map(function(a) {
-        return '<option value="' + escHtml(a) + '">' + escHtml(a) + '</option>';
+    + annual.coreActions.filter(function(a) { return a.name && a.name.trim(); }).map(function(a) {
+        return '<option value="' + escHtml(a.name) + '">' + escHtml(a.name) + '</option>';
       }).join('');
 
   if (editId) {
@@ -1162,6 +1164,10 @@ function deleteCat(idx) {
 
 // 초기 렌더 (Firebase Auth → Firestore 로드 후 실행)
 initSync(function() {
+  if (typeof migrateToIdBasedCoreActions === 'function') {
+    var migrated = migrateToIdBasedCoreActions();
+    if (migrated) pushSync(); // 마이그레이션 데이터를 Firebase에도 반영
+  }
   if (typeof refreshCategoryGlobals === 'function') refreshCategoryGlobals();
   if (typeof getPlannerName === 'function') {
     var name = getPlannerName();

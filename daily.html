@@ -155,8 +155,8 @@ function setAddTaskType(type) {
 function buildAddRow() {
   var annual      = getAnnual();
   var coreOptions = '<option value="">핵심목표 선택...</option>'
-    + annual.coreActions.filter(function(a){ return a.trim(); }).map(function(a){
-        return '<option value="' + escHtml(a) + '">' + escHtml(a) + '</option>';
+    + annual.coreActions.filter(function(a){ return a.name && a.name.trim(); }).map(function(a){
+        return '<option value="' + escHtml(a.id) + '">' + escHtml(a.name) + '</option>';
       }).join('');
   var weekOptions = '<option value="">카테고리 없음</option>'
     + WEEK_CATS.map(function(c){
@@ -191,9 +191,22 @@ function buildAddRow() {
 function _renderTaskItem(t, annual) {
   var wcColor = t.weekCat ? (WEEKCAT_COLORS[t.weekCat] || '#6366f1') : null;
   var wcBadge = wcColor ? '<span class="cat-badge" style="background:' + wcColor + '18;color:' + wcColor + '">' + escHtml(t.weekCat) + '</span>' : '';
-  var coreIdx = t.coreCategory ? annual.coreActions.indexOf(t.coreCategory) : -1;
+
+  // id 기반 탐색 (신형), 없으면 name 기반 폴백 (구형)
+  var coreAction = null;
+  if (t.coreActionId) {
+    for (var _ci = 0; _ci < annual.coreActions.length; _ci++) {
+      if (annual.coreActions[_ci].id === t.coreActionId) { coreAction = annual.coreActions[_ci]; break; }
+    }
+  }
+  if (!coreAction && t.coreCategory) {
+    for (var _cn = 0; _cn < annual.coreActions.length; _cn++) {
+      if (annual.coreActions[_cn].name === t.coreCategory) { coreAction = annual.coreActions[_cn]; break; }
+    }
+  }
+  var coreIdx = coreAction ? annual.coreActions.indexOf(coreAction) : -1;
   var ccColor = coreIdx >= 0 ? CORE_COLORS[coreIdx] : null;
-  var ccBadge = ccColor ? '<span class="cat-badge" style="background:' + ccColor + '18;color:' + ccColor + '">' + escHtml(t.coreCategory) + '</span>' : '';
+  var ccBadge = (coreAction && ccColor) ? '<span class="cat-badge" style="background:' + ccColor + '18;color:' + ccColor + '">' + escHtml(coreAction.name) + '</span>' : '';
 
   if (t.id === editingAllTaskId) {
     return '<div class="task-item task-item--editing">'
@@ -258,12 +271,25 @@ function addAllTask() {
   var coreSel = document.getElementById('day-corecat-select');
   var text    = input.value.trim();
   if (!text) return;
+
+  var coreActionId = (addTaskType === 'core' && coreSel) ? coreSel.value : '';
+  var coreName = '';
+  if (coreActionId) {
+    var ann = getAnnual();
+    var found = null;
+    for (var _i = 0; _i < ann.coreActions.length; _i++) {
+      if (ann.coreActions[_i].id === coreActionId) { found = ann.coreActions[_i]; break; }
+    }
+    coreName = found ? found.name : '';
+  }
+
   var data = getDayData(dk);
   data.allTasks.push({
     id: uid(), text: text, done: false,
     taskType:     addTaskType,
-    weekCat:      catSel  ? catSel.value  : '',
-    coreCategory: coreSel ? coreSel.value : ''
+    weekCat:      catSel ? catSel.value : '',
+    coreCategory: coreName,      // 하위 호환용
+    coreActionId: coreActionId   // id 기반 참조
   });
   saveDayData(dk, data);
   input.value = '';
@@ -666,6 +692,10 @@ function saveEditTimeEntry(id) {
 
 // 초기 렌더
 initSync(function() {
+  if (typeof migrateToIdBasedCoreActions === 'function') {
+    var migrated = migrateToIdBasedCoreActions();
+    if (migrated) pushSync();
+  }
   if (typeof refreshCategoryGlobals === 'function') refreshCategoryGlobals();
   if (typeof getPlannerName        === 'function') {
     var pName = getPlannerName();

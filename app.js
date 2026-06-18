@@ -185,13 +185,51 @@ function saveVision(data) {
 
 /* ---- 연간 ---- */
 function getAnnual() {
-  return JSON.parse(localStorage.getItem(KEYS.annual)) || {
-    goal: '',
-    coreActions: ['', '', ''],
-    progress: 0
-  };
+  var d = JSON.parse(localStorage.getItem(KEYS.annual)) || { goal: '', coreActions: [], progress: 0 };
+  d.coreActions = (d.coreActions || []).map(function(a, i) {
+    if (typeof a === 'string') return { id: 'ca-' + (i + 1), name: a, desc: '' };
+    if (!a.id)                 return { id: 'ca-' + (i + 1), name: a.name || '', desc: a.desc || '' };
+    return a;
+  });
+  while (d.coreActions.length < 3) {
+    d.coreActions.push({ id: 'ca-' + (d.coreActions.length + 1), name: '', desc: '' });
+  }
+  return d;
 }
 function saveAnnual(data) { localStorage.setItem(KEYS.annual, JSON.stringify(data)); pushSync(); }
+
+// coreActions string[] → {id,name,desc} 일회성 마이그레이션 (앱 시작 시 호출)
+function migrateToIdBasedCoreActions() {
+  var raw = JSON.parse(localStorage.getItem(KEYS.annual));
+  if (!raw || !raw.coreActions || !raw.coreActions.length) return false;
+  if (typeof raw.coreActions[0] !== 'string') return false; // already migrated
+
+  var nameToId = {};
+  raw.coreActions = raw.coreActions.map(function(a, i) {
+    var id = 'ca-' + (i + 1);
+    nameToId[a] = id;
+    return { id: id, name: a, desc: '' };
+  });
+  while (raw.coreActions.length < 3) {
+    raw.coreActions.push({ id: 'ca-' + (raw.coreActions.length + 1), name: '', desc: '' });
+  }
+  localStorage.setItem(KEYS.annual, JSON.stringify(raw));
+
+  // coreGoals 키를 name → id 로 마이그레이션
+  var allMonthly = JSON.parse(localStorage.getItem(KEYS.monthly)) || {};
+  Object.keys(allMonthly).forEach(function(mk) {
+    var mData = allMonthly[mk];
+    if (mData && mData.coreGoals) {
+      var newGoals = {};
+      Object.keys(mData.coreGoals).forEach(function(key) {
+        newGoals[nameToId[key] || key] = mData.coreGoals[key];
+      });
+      mData.coreGoals = newGoals;
+    }
+  });
+  localStorage.setItem(KEYS.monthly, JSON.stringify(allMonthly));
+  return true;
+}
 
 /* ---- 분기 ---- */
 function getQuarterly() {
@@ -333,9 +371,13 @@ function getWeekMondaysInMonth(mk) {
   return keys; // 보통 4개, 때로 5개
 }
 
-// 매일 특정 coreCategory 달성률 (해당 날 태그된 할일 기준)
+// 매일 특정 coreCategory 달성률 — corecat은 string(구형) 또는 {id,name}(신형) 모두 수용
 function calcDayCatProgress(corecat, dk) {
-  var tasks = (getDayData(dk).allTasks || []).filter(function(t) { return t.coreCategory === corecat; });
+  var id   = (corecat && typeof corecat === 'object') ? corecat.id   : null;
+  var name = (corecat && typeof corecat === 'object') ? corecat.name : corecat;
+  var tasks = (getDayData(dk).allTasks || []).filter(function(t) {
+    return (id && t.coreActionId === id) || (!t.coreActionId && t.coreCategory === name);
+  });
   if (!tasks.length) return 0;
   return Math.round(tasks.filter(function(t) { return t.done; }).length / tasks.length * 100);
 }
