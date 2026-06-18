@@ -1287,10 +1287,11 @@ function saveCatModal() {
   }
   s.weekCats = cats;
   saveSettings(s);
+  pushSync();
   refreshCategoryGlobals();
   closeModal('modal-category');
   renderCategoryList();
-  renderWeekly();   // 주간 카테고리 색상/이름 반영
+  renderWeekly();
 }
 
 function deleteCat(idx) {
@@ -1298,6 +1299,7 @@ function deleteCat(idx) {
   var s = getSettings();
   s.weekCats.splice(idx, 1);
   saveSettings(s);
+  pushSync();
   refreshCategoryGlobals();
   renderCategoryList();
   renderWeekly();
