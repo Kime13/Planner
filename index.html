@@ -582,34 +582,54 @@ function renderQuarterly() {
   }).join('');
 }
 
-/* ===== 월간: 핵심목표 3개 서브 항목 ===== */
-function renderMonthly() {
-  var annual = getAnnual();
-  var goals  = getMonthGoals(curMonthKey);
-  var cores  = annual.coreActions.filter(function(a){ return a.name && a.name.trim(); });
+/* ===== 해당 월에 배정된 핵심 액션 하나 반환 ===== */
+function getAssignedCoreAction(mk) {
+  mk = mk || curMonthKey;
+  var parts    = mk.split('-');
+  var year     = +parts[0];
+  var month    = +parts[1];
+  var qNum     = Math.ceil(month / 3);
+  var qKey     = year + '-Q' + qNum;
+  var q        = getQuarterly()[qKey] || { schedule: {} };
+  var actionId = (q.schedule || {})[mk] || '';
+  if (!actionId) return null;
+  var annual   = getAnnual();
+  for (var i = 0; i < annual.coreActions.length; i++) {
+    if (annual.coreActions[i].id === actionId) {
+      return { action: annual.coreActions[i], colorIdx: i };
+    }
+  }
+  return null;
+}
 
-  if (!cores.length) {
-    document.getElementById('month-core-goals').innerHTML =
-      '<p style="color:var(--muted);font-size:13px;font-style:italic">연간 핵심목표를 먼저 설정해주세요.</p>';
+/* ===== 월간: 배정된 핵심 액션 하나만 표시 ===== */
+function renderMonthly() {
+  var el      = document.getElementById('month-core-goals');
+  var goals   = getMonthGoals(curMonthKey);
+  var assigned = getAssignedCoreAction(curMonthKey);
+
+  if (!assigned) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:13px;font-style:italic">'
+      + '이번 달 배정된 핵심 액션이 없어요.<br>'
+      + '분기 카드에서 월별 핵심 액션을 배정해주세요.</p>';
     return;
   }
 
-  document.getElementById('month-core-goals').innerHTML = cores.map(function(a, i) {
-    var color   = CORE_COLORS[i] || '#6366f1';
-    var bgColor = color + '18';
-    var goalTxt = goals.coreGoals[a.id] || '';
-    var pct     = calcMonthCoreCategoryProgress(a, curMonthKey);
-    return '<div class="core-goal-item">'
-      + '<div class="core-goal-header">'
-      + '<span class="core-goal-tag" style="background:' + bgColor + ';color:' + color + '">' + escHtml(a.name) + '</span>'
-      + '<span class="core-goal-pct" style="color:' + color + '">' + pct + '%</span>'
-      + '</div>'
-      + (goalTxt
-          ? '<div class="core-goal-text">' + escHtml(goalTxt) + '</div>'
-          : '<div class="core-goal-text core-goal-empty">목표를 입력해주세요</div>')
-      + '<div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>'
-      + '</div>';
-  }).join('');
+  var a       = assigned.action;
+  var color   = CORE_COLORS[assigned.colorIdx] || '#6366f1';
+  var goalTxt = goals.coreGoals[a.id] || '';
+  var pct     = calcMonthCoreCategoryProgress(a, curMonthKey);
+
+  el.innerHTML = '<div class="core-goal-item">'
+    + '<div class="core-goal-header">'
+    + '<span class="core-goal-tag" style="background:' + color + '18;color:' + color + '">' + escHtml(a.name) + '</span>'
+    + '<span class="core-goal-pct" style="color:' + color + '">' + pct + '%</span>'
+    + '</div>'
+    + (goalTxt
+        ? '<div class="core-goal-text">' + escHtml(goalTxt) + '</div>'
+        : '<div class="core-goal-text core-goal-empty">이번 달 목표를 입력해주세요</div>')
+    + '<div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>'
+    + '</div>';
 }
 
 /* ===== 주간 ===== */
@@ -797,29 +817,37 @@ function saveQuarterlyModal() {
   renderQuarterly();
 }
 
-/* ===== 월간 모달 (핵심목표 동적 생성) ===== */
+/* ===== 월간 모달 (배정된 핵심 액션 하나만) ===== */
 function openMonthModal() {
-  var annual = getAnnual();
-  var goals  = getMonthGoals(curMonthKey);
-  var cores  = annual.coreActions.filter(function(a){ return a.name && a.name.trim(); });
+  var goals    = getMonthGoals(curMonthKey);
+  var assigned = getAssignedCoreAction(curMonthKey);
 
   document.getElementById('month-modal-title').textContent =
     (today.getMonth() + 1) + '월 목표 편집';
 
-  document.getElementById('month-modal-form').innerHTML = cores.map(function(a, i) {
-    var color = CORE_COLORS[i] || '#6366f1';
+  if (!assigned) {
+    document.getElementById('month-modal-form').innerHTML =
+      '<p style="color:var(--muted);font-size:13px;line-height:1.6">'
+      + '이번 달 배정된 핵심 액션이 없어요.<br>'
+      + '분기 카드에서 먼저 월별 핵심 액션을 배정해주세요.</p>';
+  } else {
+    var a     = assigned.action;
+    var color = CORE_COLORS[assigned.colorIdx] || '#6366f1';
     var val   = escHtml(goals.coreGoals[a.id] || '');
-    return '<div class="form-group">'
+    document.getElementById('month-modal-form').innerHTML =
+      '<div class="form-group">'
       + '<label class="form-label" style="color:' + color + '">' + escHtml(a.name) + '</label>'
-      + '<textarea class="textarea month-goal-input" data-core="' + escHtml(a.id) + '" rows="2" placeholder="' + escHtml(a.name) + ' 관련 이번달 목표...">' + val + '</textarea>'
+      + '<textarea class="textarea month-goal-input" data-core="' + escHtml(a.id) + '" rows="3"'
+      + ' placeholder="' + escHtml(a.name) + ' 관련 이번달 목표...">' + val + '</textarea>'
       + '</div>';
-  }).join('');
+  }
 
   document.getElementById('modal-monthly').style.display = 'flex';
 }
 function saveMonthModal() {
-  var inputs = document.querySelectorAll('.month-goal-input');
-  var coreGoals = {};
+  var inputs    = document.querySelectorAll('.month-goal-input');
+  var existing  = getMonthGoals(curMonthKey);
+  var coreGoals = existing.coreGoals || {}; // 다른 달 목표 보존
   inputs.forEach(function(el) {
     coreGoals[el.getAttribute('data-core')] = el.value.trim();
   });
