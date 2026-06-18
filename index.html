@@ -189,16 +189,13 @@
   </div>
 </div>
 
-<!-- ===== 모달: 분기 편집 ===== -->
+<!-- ===== 모달: 분기 스케줄 편집 ===== -->
 <div class="modal-overlay" id="modal-quarterly" style="display:none" onclick="closeIfOverlay(event,'modal-quarterly')">
   <div class="modal">
-    <div class="modal-title" id="q-modal-title">분기 목표 편집</div>
+    <div class="modal-title" id="q-modal-title">분기 스케줄 편집</div>
     <input type="hidden" id="q-modal-key">
-    <div class="form-group">
-      <label class="form-label">목표</label>
-      <input class="input" id="input-q-goal" type="text">
-    </div>
-    <div id="q-modal-progress-info" style="background:var(--bg);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--muted);line-height:1.6"></div>
+    <div id="q-modal-schedule-form"></div>
+    <div id="q-modal-progress-info" style="background:var(--bg);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--muted);line-height:1.6;margin-top:12px"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-quarterly')">취소</button>
       <button class="btn btn-primary" onclick="saveQuarterlyModal()">저장</button>
@@ -524,23 +521,44 @@ function renderAnnual() {
     }).join('');
 }
 
-/* ===== 분기 (월간 데이터 기반 자동 달성률) ===== */
+/* ===== 분기 (핵심목표 스케줄 + 달성률) ===== */
 function renderQuarterly() {
-  var d      = getQuarterly();
-  var keys   = ['Q1','Q2','Q3','Q4'];
-  var labels = ['1분기','2분기','3분기','4분기'];
-  var colors = ['#6366f1','#8b5cf6','#06b6d4','#10b981'];
-  var year   = today.getFullYear();
+  var d          = getQuarterly();
+  var keys       = ['Q1','Q2','Q3','Q4'];
+  var labels     = ['1분기','2분기','3분기','4분기'];
+  var colors     = ['#6366f1','#8b5cf6','#06b6d4','#10b981'];
+  var year       = today.getFullYear();
+  var annual     = getAnnual();
+  var monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
   document.getElementById('quarterly-grid').innerHTML = keys.map(function(k, i) {
-    var q        = d[k];
+    var qKey     = year + '-' + k;
+    var q        = d[qKey] || { schedule: {} };
     var isActive = (i + 1) === curQ;
     var pct      = calcQuarterProgress(i + 1, year);
-    return '<div class="q-card' + (isActive ? ' active' : '') + '" onclick="openQuarterlyModal(\'' + k + '\')">'
+    var color    = colors[i];
+    var startM   = i * 3 + 1;
+
+    var scheduleHtml = '';
+    for (var m = startM; m < startM + 3; m++) {
+      var mk       = year + '-' + pad(m);
+      var actionId = (q.schedule || {})[mk] || '';
+      var action   = null;
+      for (var _ai = 0; _ai < annual.coreActions.length; _ai++) {
+        if (annual.coreActions[_ai].id === actionId) { action = annual.coreActions[_ai]; break; }
+      }
+      scheduleHtml += '<div class="q-schedule-row">'
+        + '<span class="q-schedule-month">' + monthNames[m - 1] + '</span>'
+        + '<span class="q-schedule-core' + (action ? '' : ' q-schedule-empty') + '">'
+        + (action ? escHtml(action.name) : '미배정') + '</span>'
+        + '</div>';
+    }
+
+    return '<div class="q-card' + (isActive ? ' active' : '') + '" onclick="openQuarterlyModal(\'' + qKey + '\')">'
       + '<div class="q-label">' + labels[i] + (isActive ? ' ◀ 현재' : '') + '</div>'
-      + '<div class="q-ring">' + svgRing(pct, 68, colors[i], '#f0f4ff') + '</div>'
-      + '<div class="q-goal">'
-      + (q.goal || '<span style="color:#b0bec5;font-style:italic">목표 없음</span>')
-      + '</div></div>';
+      + '<div class="q-ring">' + svgRing(pct, 56, color, isActive ? 'rgba(99,102,241,.12)' : '#f0f4ff') + '</div>'
+      + '<div class="q-schedule">' + scheduleHtml + '</div>'
+      + '</div>';
   }).join('');
 }
 
@@ -680,26 +698,52 @@ function saveAnnualModal() {
 
 /* ===== 분기 모달 ===== */
 function openQuarterlyModal(qKey) {
-  var d      = getQuarterly();
-  var labels = {Q1:'1분기',Q2:'2분기',Q3:'3분기',Q4:'4분기'};
-  var qNums  = {Q1:1,Q2:2,Q3:3,Q4:4};
-  var qNum   = qNums[qKey];
-  var year   = today.getFullYear();
-  var pct    = calcQuarterProgress(qNum, year);
-
-  document.getElementById('q-modal-title').textContent = labels[qKey] + ' 목표 편집';
-  document.getElementById('q-modal-key').value = qKey;
-  document.getElementById('input-q-goal').value = d[qKey].goal;
-
-  // 분기 내 월별 달성률 표시
+  var d          = getQuarterly();
+  var annual     = getAnnual();
+  var parts      = qKey.split('-');          // ['2026', 'Q2']
+  var year       = +parts[0];
+  var qPart      = parts[1];                 // 'Q1'..'Q4'
+  var qNum       = +qPart.replace('Q','');
+  var q          = d[qKey] || { schedule: {}, archived: false };
+  var pct        = calcQuarterProgress(qNum, year);
   var startMonth = (qNum - 1) * 3 + 1;
   var monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-  var rows = '';
+  var cores      = annual.coreActions.filter(function(a){ return a.name && a.name.trim(); });
+
+  document.getElementById('q-modal-title').textContent = qNum + '분기 핵심목표 스케줄';
+  document.getElementById('q-modal-key').value = qKey;
+
+  // 핵심목표 옵션
+  var coreOptHtml = '<option value="">미배정</option>'
+    + cores.map(function(a, i) {
+        return '<option value="' + escHtml(a.id) + '">' + escHtml(a.name) + '</option>';
+      }).join('');
+
+  // 스케줄 셀렉트 폼
+  var formHtml = '';
   for (var m = startMonth; m < startMonth + 3; m++) {
     var mk = year + '-' + pad(m);
-    var mp = calcMonthTotalProgress(mk);
+    formHtml += '<div class="form-group">'
+      + '<label class="form-label">' + monthNames[m - 1] + ' 집중 핵심목표</label>'
+      + '<select class="add-select" style="width:100%" id="q-sched-' + mk + '">' + coreOptHtml + '</select>'
+      + '</div>';
+  }
+  document.getElementById('q-modal-schedule-form').innerHTML = formHtml;
+
+  // 저장된 값 세팅
+  for (var m2 = startMonth; m2 < startMonth + 3; m2++) {
+    var mk2 = year + '-' + pad(m2);
+    var sel = document.getElementById('q-sched-' + mk2);
+    if (sel) sel.value = (q.schedule || {})[mk2] || '';
+  }
+
+  // 월별 달성률 정보
+  var rows = '';
+  for (var m3 = startMonth; m3 < startMonth + 3; m3++) {
+    var mk3 = year + '-' + pad(m3);
+    var mp  = calcMonthTotalProgress(mk3);
     rows += '<div style="display:flex;justify-content:space-between;padding:3px 0">'
-      + '<span>' + monthNames[m-1] + '</span>'
+      + '<span>' + monthNames[m3 - 1] + '</span>'
       + '<span style="font-weight:600;color:var(--primary)">' + mp + '%</span>'
       + '</div>';
   }
@@ -710,10 +754,24 @@ function openQuarterlyModal(qKey) {
 
   document.getElementById('modal-quarterly').style.display = 'flex';
 }
+
 function saveQuarterlyModal() {
-  var d = getQuarterly();
-  var k = document.getElementById('q-modal-key').value;
-  d[k] = { goal: document.getElementById('input-q-goal').value.trim(), progress: 0 };
+  var d      = getQuarterly();
+  var qKey   = document.getElementById('q-modal-key').value;
+  var parts  = qKey.split('-');
+  var year   = +parts[0];
+  var qNum   = +parts[1].replace('Q','');
+  var startM = (qNum - 1) * 3 + 1;
+
+  if (!d[qKey]) d[qKey] = { schedule: {}, archived: false };
+  if (!d[qKey].schedule) d[qKey].schedule = {};
+
+  for (var m = startM; m < startM + 3; m++) {
+    var mk  = year + '-' + pad(m);
+    var sel = document.getElementById('q-sched-' + mk);
+    d[qKey].schedule[mk] = sel ? sel.value : '';
+  }
+
   saveQuarterly(d);
   closeModal('modal-quarterly');
   renderQuarterly();
@@ -1166,7 +1224,11 @@ function deleteCat(idx) {
 initSync(function() {
   if (typeof migrateToIdBasedCoreActions === 'function') {
     var migrated = migrateToIdBasedCoreActions();
-    if (migrated) pushSync(); // 마이그레이션 데이터를 Firebase에도 반영
+    if (migrated) pushSync();
+  }
+  if (typeof migrateQuarterlyToSchedule === 'function') {
+    var qMigrated = migrateQuarterlyToSchedule();
+    if (qMigrated) pushSync();
   }
   if (typeof refreshCategoryGlobals === 'function') refreshCategoryGlobals();
   if (typeof getPlannerName === 'function') {

@@ -233,14 +233,43 @@ function migrateToIdBasedCoreActions() {
 
 /* ---- 분기 ---- */
 function getQuarterly() {
-  return JSON.parse(localStorage.getItem(KEYS.quarterly)) || {
-    Q1: { goal: '', progress: 0 },
-    Q2: { goal: '', progress: 0 },
-    Q3: { goal: '', progress: 0 },
-    Q4: { goal: '', progress: 0 }
-  };
+  var year = new Date().getFullYear();
+  var raw  = JSON.parse(localStorage.getItem(KEYS.quarterly)) || {};
+
+  // 구형 Q1..Q4 키 → YYYY-Q1..YYYY-Q4 마이그레이션 (in-memory)
+  ['Q1','Q2','Q3','Q4'].forEach(function(k) {
+    var yk = year + '-' + k;
+    if (raw[k] && !raw[yk]) {
+      raw[yk] = { goal: raw[k].goal || '', schedule: {}, archived: false };
+    }
+  });
+
+  var result = {};
+  ['Q1','Q2','Q3','Q4'].forEach(function(k) {
+    var yk = year + '-' + k;
+    if (!raw[yk]) raw[yk] = { schedule: {}, archived: false, goal: '' };
+    if (!raw[yk].schedule) raw[yk].schedule = {};
+    result[yk] = raw[yk];
+  });
+  return result;
 }
 function saveQuarterly(data) { localStorage.setItem(KEYS.quarterly, JSON.stringify(data)); pushSync(); }
+
+// 구형 Q1..Q4 키를 YYYY-Q 기반으로 영구 마이그레이션
+function migrateQuarterlyToSchedule() {
+  var raw = JSON.parse(localStorage.getItem(KEYS.quarterly)) || {};
+  if (!raw['Q1'] && !raw['Q2'] && !raw['Q3'] && !raw['Q4']) return false;
+  var year = new Date().getFullYear();
+  ['Q1','Q2','Q3','Q4'].forEach(function(k) {
+    var yk = year + '-' + k;
+    if (raw[k] && !raw[yk]) {
+      raw[yk] = { goal: raw[k].goal || '', schedule: {}, archived: false };
+    }
+    delete raw[k];
+  });
+  localStorage.setItem(KEYS.quarterly, JSON.stringify(raw));
+  return true;
+}
 
 /* ---- 월간 ----
    구조: { coreGoals: { '영어': '...', 'AI공부': '...', '이력서...': '...' } }
