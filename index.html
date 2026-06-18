@@ -57,6 +57,7 @@
     </div>
     <div id="core-progress-section"></div>
     <div id="today-progress-section"></div>
+    <div id="core-time-section"></div>
   </div>
 
   <!-- 연간 카드 -->
@@ -497,6 +498,25 @@ function renderCoreProgress() {
   }
   t += '</div>';
   todaySec.innerHTML = t;
+
+  /* ── PM 핵심 투자 시간 ── */
+  var timeSec   = document.getElementById('core-time-section');
+  var todayMin  = calcDayCoreTime(todayKey);
+  var weekMin   = calcWeekCoreTime(curWeekKey);
+  var monthMin  = calcMonthCoreTime(curMonthKey);
+  if (todayMin > 0 || weekMin > 0 || monthMin > 0) {
+    timeSec.innerHTML =
+      '<div class="core-time-wrap">'
+      + '<div class="core-time-title">⏱ 핵심 투자 시간</div>'
+      + '<div class="core-time-grid">'
+      +   '<div class="core-time-item"><span class="core-time-label">오늘</span><span class="core-time-val">' + fmtCoreTime(todayMin) + '</span></div>'
+      +   '<div class="core-time-item"><span class="core-time-label">이번 주</span><span class="core-time-val">' + fmtCoreTime(weekMin) + '</span></div>'
+      +   '<div class="core-time-item"><span class="core-time-label">이번 달</span><span class="core-time-val">' + fmtCoreTime(monthMin) + '</span></div>'
+      + '</div>'
+      + '</div>';
+  } else {
+    timeSec.innerHTML = '';
+  }
 }
 
 /* ===== 연간 ===== */

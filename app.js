@@ -472,6 +472,52 @@ function calcMonthTotalProgress(mk) {
   return Math.round(sum / wks.length);
 }
 
+/* ---- PM 핵심 투자 시간 집계 ---- */
+
+// 하루 핵심 투자 시간 (분) — coreActionId 또는 coreCategory 있는 타임트래커 항목
+function calcDayCoreTime(dk) {
+  var entries = getDayData(dk).actual || [];
+  return entries.reduce(function(sum, e) {
+    return sum + ((e.coreActionId || e.coreCategory) && e.duration ? e.duration : 0);
+  }, 0);
+}
+
+// 주간 핵심 투자 시간 (분)
+function calcWeekCoreTime(wk) {
+  wk = wk || weekKey();
+  var monday = getMondayOfWeek(wk);
+  var total = 0;
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    total += calcDayCoreTime(dateKey(d));
+  }
+  return total;
+}
+
+// 월간 핵심 투자 시간 (분)
+function calcMonthCoreTime(mk) {
+  mk = mk || monthKey();
+  var parts = mk.split('-');
+  var year = +parts[0], month = +parts[1];
+  var daysInMonth = new Date(year, month, 0).getDate();
+  var total = 0;
+  for (var d = 1; d <= daysInMonth; d++) {
+    total += calcDayCoreTime(year + '-' + pad(month) + '-' + pad(d));
+  }
+  return total;
+}
+
+// 분 → "Xh Ym" 포맷
+function fmtCoreTime(minutes) {
+  if (!minutes) return '0분';
+  var h = Math.floor(minutes / 60);
+  var m = minutes % 60;
+  if (h > 0 && m > 0) return h + 'h ' + m + '분';
+  if (h > 0) return h + '시간';
+  return m + '분';
+}
+
 // 분기 달성률 = Σ(월간%) ÷ 3  (항상 3으로 나눔)
 function calcQuarterProgress(qNum, year) {
   year = year || new Date().getFullYear();

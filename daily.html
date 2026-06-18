@@ -475,18 +475,30 @@ function _getActiveEntry() {
 }
 
 function startTimer() {
-  var input = document.getElementById('timer-input');
-  var text  = input ? input.value.trim() : '';
+  var input    = document.getElementById('timer-input');
+  var coreSel  = document.getElementById('timer-core-select');
+  var text     = input ? input.value.trim() : '';
   if (!text) { if (input) input.focus(); return; }
 
   if (_getActiveEntry()) stopTimer();
+
+  var coreActionId = coreSel ? coreSel.value : '';
+  var coreName = '';
+  if (coreActionId) {
+    var ann = getAnnual();
+    for (var _i = 0; _i < ann.coreActions.length; _i++) {
+      if (ann.coreActions[_i].id === coreActionId) { coreName = ann.coreActions[_i].name; break; }
+    }
+  }
 
   var data = getDayData(dk);
   if (!data.actual) data.actual = [];
   data.actual.push({
     id: uid(), text: text,
     startTime: new Date().toISOString(),
-    endTime: null, duration: 0
+    endTime: null, duration: 0,
+    coreActionId: coreActionId,
+    coreCategory: coreName
   });
   saveDayData(dk, data);
   input.value = '';
@@ -558,10 +570,16 @@ function renderTimeTracker() {
   /* ── 시작 입력창 (타이머 없을 때만) ── */
   var startEl = document.getElementById('timer-start-area');
   if (!active) {
+    var ann = getAnnual();
+    var coreOpts = '<option value="">핵심목표 없음</option>'
+      + ann.coreActions.filter(function(a){ return a.name && a.name.trim(); })
+          .map(function(a){ return '<option value="' + escHtml(a.id) + '">' + escHtml(a.name) + '</option>'; })
+          .join('');
     startEl.innerHTML =
-      '<div class="add-row">'
+      '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">'
       + '<input class="add-input" id="timer-input" type="text" placeholder="무엇을 할 건가요?"'
-      + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing) startTimer()">'
+      + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing) startTimer()" style="flex:1;min-width:120px">'
+      + '<select class="add-select" id="timer-core-select" style="max-width:130px">' + coreOpts + '</select>'
       + '<button class="btn btn-primary btn-sm" style="white-space:nowrap" onclick="startTimer()">▶ 시작</button>'
       + '</div>';
   } else {
@@ -597,9 +615,27 @@ function renderTimeTracker() {
               + '</div>';
           }
 
+          var ann2    = getAnnual();
+          var tAction = null;
+          if (a.coreActionId) {
+            for (var _ti = 0; _ti < ann2.coreActions.length; _ti++) {
+              if (ann2.coreActions[_ti].id === a.coreActionId) { tAction = ann2.coreActions[_ti]; break; }
+            }
+          }
+          if (!tAction && a.coreCategory) {
+            for (var _tn = 0; _tn < ann2.coreActions.length; _tn++) {
+              if (ann2.coreActions[_tn].name === a.coreCategory) { tAction = ann2.coreActions[_tn]; break; }
+            }
+          }
+          var tIdx   = tAction ? ann2.coreActions.indexOf(tAction) : -1;
+          var tColor = tIdx >= 0 ? CORE_COLORS[tIdx] : null;
+          var tBadge = (tAction && tColor)
+            ? '<span class="cat-badge" style="background:' + tColor + '18;color:' + tColor + '">' + escHtml(tAction.name) + '</span>'
+            : '';
+
           return '<div class="timeline-entry timeline-entry--editable" onclick="startEditTimeEntry(\'' + a.id + '\')">'
             + '<div class="timeline-entry-body">'
-            +   '<div class="timeline-entry-name">' + escHtml(a.text) + '</div>'
+            +   '<div class="timeline-entry-name">' + escHtml(a.text) + (tBadge ? ' ' + tBadge : '') + '</div>'
             +   '<div class="timeline-entry-meta">'
             +     '<span class="time-chip">' + _fmtHHMM(s) + ' → ' + _fmtHHMM(e) + '</span>'
             +     '<span class="duration-chip">' + _fmtDuration(a.duration) + '</span>'
@@ -612,7 +648,16 @@ function renderTimeTracker() {
       + '<div class="timer-total-row">'
       +   '<span class="timer-total-label">🕐 오늘 총 집중시간</span>'
       +   '<span class="timer-total-value">' + _fmtDuration(totalMin) + '</span>'
-      + '</div>';
+      + '</div>'
+      + (function() {
+          var coreMin = calcDayCoreTime(dk);
+          return coreMin > 0
+            ? '<div class="timer-total-row timer-core-row">'
+              + '<span class="timer-total-label">🎯 핵심 투자</span>'
+              + '<span class="timer-total-value" style="color:var(--primary)">' + fmtCoreTime(coreMin) + '</span>'
+              + '</div>'
+            : '';
+        })();
   } else if (!active) {
     timelineEl.innerHTML =
       '<div class="no-timer-msg">아직 기록된 활동이 없어요 🕐<br>위에서 타이머를 시작해 보세요!</div>';

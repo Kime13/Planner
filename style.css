@@ -705,6 +705,7 @@ body {
 }
 .timer-total-label { font-size: 13px; color: var(--muted); }
 .timer-total-value { font-size: 15px; font-weight: 700; color: var(--primary); }
+.timer-core-row { padding-top: 4px; border-top: 1px dashed var(--border); margin-top: 4px; }
 .no-timer-msg {
   text-align: center;
   padding: 20px 0 10px;
@@ -941,6 +942,31 @@ body {
   min-width: 38px; text-align: right; flex-shrink: 0;
 }
 .today-prog-empty { font-size: 12px; color: var(--muted); font-style: italic; }
+
+/* ===== 핵심 투자 시간 (index.html 대시보드) ===== */
+.core-time-wrap {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.core-time-title {
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em;
+  margin-bottom: 10px;
+}
+.core-time-grid {
+  display: flex; gap: 0;
+}
+.core-time-item {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; gap: 4px;
+  padding: 8px 4px;
+  background: var(--bg); border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.core-time-item + .core-time-item { margin-left: 8px; }
+.core-time-label { font-size: 11px; color: var(--muted); }
+.core-time-val { font-size: 16px; font-weight: 700; color: var(--primary); }
 
 /* 핵심목표 미완료 경고 배너 (daily.html) */
 .core-warning-banner {
