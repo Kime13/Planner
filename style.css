@@ -944,6 +944,37 @@ body {
 }
 .core-warning-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
 
+/* ===== 할 일 타입 토글 (핵심 과업 / 루틴) ===== */
+.task-type-toggle {
+  display: flex; gap: 6px; margin-top: 10px;
+}
+.task-type-btn {
+  flex: 1; padding: 7px 0; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border); background: var(--surface);
+  font-size: 13px; font-weight: 600; color: var(--muted);
+  cursor: pointer; transition: all .15s;
+}
+.task-type-btn--active {
+  border-color: var(--primary); background: var(--primary);
+  color: #fff;
+}
+.task-type-btn:not(.task-type-btn--active):hover {
+  border-color: var(--primary); color: var(--primary);
+}
+
+/* ===== 할 일 그룹 헤더 ===== */
+.task-group-header {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  padding: 10px 0 4px; text-transform: uppercase; letter-spacing: .04em;
+}
+.task-group-header--mt { margin-top: 6px; }
+.task-group-count {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 20px; padding: 1px 8px;
+}
+
 /* ===== 반응형 ===== */
 @media (max-width: 720px) {
   .quarterly-grid { grid-template-columns: repeat(2, 1fr); }

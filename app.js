@@ -276,6 +276,17 @@ function calcDayProgress(dk) {
   return Math.round(done / d.allTasks.length * 100);
 }
 
+// Core Task만 달성률 (taskType==='core' 또는 coreCategory 있는 것)
+function calcDayCoreProgress(dk) {
+  var d = getDayData(dk);
+  var coreTasks = (d.allTasks || []).filter(function(t) {
+    return t.taskType === 'core' || (t.coreCategory && t.coreCategory !== '');
+  });
+  if (!coreTasks.length) return null;
+  var done = coreTasks.filter(function(t) { return t.done; }).length;
+  return Math.round(done / coreTasks.length * 100);
+}
+
 function calcWeekProgress(wk) {
   var data = getWeekData(wk || weekKey());
   var total = 0, done = 0;

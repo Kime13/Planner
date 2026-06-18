@@ -95,6 +95,7 @@ var dk = params.get('date') || dateKey();
 var editingAllTaskId    = null;
 var editingPriorityId   = null;
 var editingTimeEntryId  = null;
+var addTaskType         = 'routine';
 
 // 타이머 인터벌
 var _timerInterval = null;
@@ -123,21 +124,38 @@ function updateCoreWarning() {
 
 /* ===== 달성률 ===== */
 function updateProgress() {
-  var pct = calcDayProgress(dk);
+  var pct     = calcDayProgress(dk);
+  var corePct = calcDayCoreProgress(dk);
   if (pct === null) pct = 0;
+
   document.getElementById('day-ring').innerHTML =
     svgRing(pct, 72, 'white', 'rgba(255,255,255,.25)');
-  document.getElementById('day-progress-sub').textContent =
-    pct === 0   ? '오늘도 화이팅! 💪' :
-    pct === 100 ? '오늘 모든 할 일 완료! 🎉' :
-    '달성률 ' + pct + '% — 잘 하고 있어요!';
+
+  var subText;
+  if (pct === 0 && corePct === null) {
+    subText = '오늘도 화이팅! 💪';
+  } else if (pct === 100) {
+    subText = '오늘 모든 할 일 완료! 🎉';
+  } else if (corePct !== null) {
+    subText = '전체 ' + pct + '% · 🎯 핵심 ' + corePct + '%';
+  } else {
+    subText = '달성률 ' + pct + '% — 잘 하고 있어요!';
+  }
+  document.getElementById('day-progress-sub').textContent = subText;
 }
 
-/* ===== 추가 행 동적 생성 (주간 카테고리 + 핵심목표) ===== */
+/* ===== 추가 행 동적 생성 (핵심 과업 / 루틴 탭) ===== */
+function setAddTaskType(type) {
+  addTaskType = type;
+  buildAddRow();
+  var inp = document.getElementById('all-tasks-input');
+  if (inp) inp.focus();
+}
+
 function buildAddRow() {
   var annual      = getAnnual();
-  var coreOptions = '<option value="">핵심목표 없음</option>'
-    + annual.coreActions.filter(function(a){ return a.trim(); }).map(function(a, i){
+  var coreOptions = '<option value="">핵심목표 선택...</option>'
+    + annual.coreActions.filter(function(a){ return a.trim(); }).map(function(a){
         return '<option value="' + escHtml(a) + '">' + escHtml(a) + '</option>';
       }).join('');
   var weekOptions = '<option value="">카테고리 없음</option>'
@@ -145,17 +163,55 @@ function buildAddRow() {
         return '<option value="' + escHtml(c) + '">' + escHtml(c) + '</option>';
       }).join('');
 
+  var isCore = addTaskType === 'core';
+  var coreActive    = isCore  ? ' task-type-btn--active' : '';
+  var routineActive = !isCore ? ' task-type-btn--active' : '';
+
+  var selectsHtml = isCore
+    ? '<select class="add-select" id="day-corecat-select">' + coreOptions + '</select>'
+    : '<select class="add-select" id="day-weekcat-select">' + weekOptions + '</select>';
+
   document.getElementById('all-tasks-add-row').innerHTML =
-    '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
-    + '<select class="add-select" id="day-weekcat-select">' + weekOptions + '</select>'
-    + '<select class="add-select" id="day-corecat-select">' + coreOptions + '</select>'
-    + '<input class="add-input" id="all-tasks-input" type="text" placeholder="할 일 추가..."'
+    '<div class="task-type-toggle">'
+    + '<button class="task-type-btn' + coreActive    + '" onclick="setAddTaskType(\'core\')">'
+    + '🎯 핵심 과업</button>'
+    + '<button class="task-type-btn' + routineActive + '" onclick="setAddTaskType(\'routine\')">'
+    + '📌 루틴</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">'
+    + selectsHtml
+    + '<input class="add-input" id="all-tasks-input" type="text"'
+    + ' placeholder="' + (isCore ? '핵심 과업 추가...' : '루틴 할 일 추가...') + '"'
     + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing) addAllTask()" style="flex:1;min-width:120px">'
     + '<button class="btn btn-primary btn-sm" onclick="addAllTask()">추가</button>'
     + '</div>';
 }
 
-/* ===== 오늘의 할 일 (주간 카테고리 + 핵심목표 배지) ===== */
+/* ===== 오늘의 할 일 (핵심 과업 / 루틴 그룹 분리) ===== */
+function _renderTaskItem(t, annual) {
+  var wcColor = t.weekCat ? (WEEKCAT_COLORS[t.weekCat] || '#6366f1') : null;
+  var wcBadge = wcColor ? '<span class="cat-badge" style="background:' + wcColor + '18;color:' + wcColor + '">' + escHtml(t.weekCat) + '</span>' : '';
+  var coreIdx = t.coreCategory ? annual.coreActions.indexOf(t.coreCategory) : -1;
+  var ccColor = coreIdx >= 0 ? CORE_COLORS[coreIdx] : null;
+  var ccBadge = ccColor ? '<span class="cat-badge" style="background:' + ccColor + '18;color:' + ccColor + '">' + escHtml(t.coreCategory) + '</span>' : '';
+
+  if (t.id === editingAllTaskId) {
+    return '<div class="task-item task-item--editing">'
+      + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleAllTask(\'' + t.id + '\')">'
+      + '<input class="task-edit-input" id="ei-' + t.id + '" value="' + escHtml(t.text) + '"'
+      + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing)saveEditAllTask(\'' + t.id + '\');else if(event.key===\'Escape\')cancelEditAllTask()">'
+      + '<button class="btn-save-sm" onmousedown="event.preventDefault()" onclick="saveEditAllTask(\'' + t.id + '\')">✓</button>'
+      + '<button class="btn-cancel-sm" onmousedown="event.preventDefault()" onclick="cancelEditAllTask()">✕</button>'
+      + '</div>';
+  }
+  return '<div class="task-item' + (t.done ? ' done' : '') + '">'
+    + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleAllTask(\'' + t.id + '\')">'
+    + '<span class="task-text task-text--editable" onclick="startEditAllTask(\'' + t.id + '\')">' + escHtml(t.text) + '</span>'
+    + wcBadge + ccBadge
+    + '<button class="btn-danger-sm" onclick="deleteAllTask(\'' + t.id + '\')">×</button>'
+    + '</div>';
+}
+
 function renderAllTasks() {
   var data   = getDayData(dk);
   var tasks  = data.allTasks;
@@ -164,30 +220,35 @@ function renderAllTasks() {
   document.getElementById('all-tasks-count').textContent = done + ' / ' + tasks.length + ' 완료';
   updateCoreWarning();
 
-  document.getElementById('all-tasks-list').innerHTML = tasks.map(function(t) {
-    var wcColor = t.weekCat ? (WEEKCAT_COLORS[t.weekCat] || '#6366f1') : null;
-    var wcBadge = wcColor ? '<span class="cat-badge" style="background:' + wcColor + '18;color:' + wcColor + '">' + escHtml(t.weekCat) + '</span>' : '';
-    var coreIdx = t.coreCategory ? annual.coreActions.indexOf(t.coreCategory) : -1;
-    var ccColor = coreIdx >= 0 ? CORE_COLORS[coreIdx] : null;
-    var ccBadge = ccColor ? '<span class="cat-badge" style="background:' + ccColor + '18;color:' + ccColor + '">' + escHtml(t.coreCategory) + '</span>' : '';
+  // Core: taskType==='core' 또는 coreCategory 있는 것 (기존 데이터 하위 호환)
+  var coreTasks    = tasks.filter(function(t){ return t.taskType === 'core' || (t.taskType !== 'routine' && t.coreCategory && t.coreCategory !== ''); });
+  var routineTasks = tasks.filter(function(t){ return coreTasks.indexOf(t) === -1; });
 
-    if (t.id === editingAllTaskId) {
-      return '<div class="task-item task-item--editing">'
-        + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleAllTask(\'' + t.id + '\')">'
-        + '<input class="task-edit-input" id="ei-' + t.id + '" value="' + escHtml(t.text) + '"'
-        + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing)saveEditAllTask(\'' + t.id + '\');else if(event.key===\'Escape\')cancelEditAllTask()">'
-        + '<button class="btn-save-sm" onmousedown="event.preventDefault()" onclick="saveEditAllTask(\'' + t.id + '\')">✓</button>'
-        + '<button class="btn-cancel-sm" onmousedown="event.preventDefault()" onclick="cancelEditAllTask()">✕</button>'
-        + '</div>';
-    }
-    return '<div class="task-item' + (t.done ? ' done' : '') + '">'
-      + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleAllTask(\'' + t.id + '\')">'
-      + '<span class="task-text task-text--editable" onclick="startEditAllTask(\'' + t.id + '\')">' + escHtml(t.text) + '</span>'
-      + wcBadge + ccBadge
-      + '<button class="btn-danger-sm" onclick="deleteAllTask(\'' + t.id + '\')">×</button>'
+  var html = '';
+
+  if (coreTasks.length > 0) {
+    var coreDone = coreTasks.filter(function(t){ return t.done; }).length;
+    html += '<div class="task-group-header">'
+      + '<span>🎯 핵심 과업</span>'
+      + '<span class="task-group-count">' + coreDone + ' / ' + coreTasks.length + '</span>'
       + '</div>';
-  }).join('');
+    html += coreTasks.map(function(t){ return _renderTaskItem(t, annual); }).join('');
+  }
 
+  if (routineTasks.length > 0) {
+    var routineDone = routineTasks.filter(function(t){ return t.done; }).length;
+    html += '<div class="task-group-header' + (coreTasks.length > 0 ? ' task-group-header--mt' : '') + '">'
+      + '<span>📌 루틴</span>'
+      + '<span class="task-group-count">' + routineDone + ' / ' + routineTasks.length + '</span>'
+      + '</div>';
+    html += routineTasks.map(function(t){ return _renderTaskItem(t, annual); }).join('');
+  }
+
+  if (tasks.length === 0) {
+    html = '<p style="font-size:13px;color:var(--muted);text-align:center;padding:12px 0">아직 할 일이 없어요. 추가해보세요!</p>';
+  }
+
+  document.getElementById('all-tasks-list').innerHTML = html;
   updateProgress();
 }
 
@@ -200,6 +261,7 @@ function addAllTask() {
   var data = getDayData(dk);
   data.allTasks.push({
     id: uid(), text: text, done: false,
+    taskType:     addTaskType,
     weekCat:      catSel  ? catSel.value  : '',
     coreCategory: coreSel ? coreSel.value : ''
   });
