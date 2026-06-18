@@ -301,9 +301,30 @@ function getWeekData(wk) {
   if (!all[wk]) {
     all[wk] = {};
     WEEK_CATS.forEach(function(c) { all[wk][c] = []; });
+    all[wk]['__core__'] = [];
+    localStorage.setItem(KEYS.weekly, JSON.stringify(all));
+  } else if (!all[wk]['__core__']) {
+    all[wk]['__core__'] = [];
     localStorage.setItem(KEYS.weekly, JSON.stringify(all));
   }
   return all[wk];
+}
+
+// 주간 Core 태스크 카운트 (daily allTasks 기반)
+function getDailyCountsForCoreAction(action, wk) {
+  wk = wk || weekKey();
+  var monday = getMondayOfWeek(wk);
+  var total = 0, done = 0;
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    (getDayData(dateKey(d)).allTasks || []).forEach(function(t) {
+      var isCore = (action.id && t.coreActionId === action.id) ||
+                   (!t.coreActionId && t.coreCategory === action.name);
+      if (isCore) { total++; if (t.done) done++; }
+    });
+  }
+  return { total: total, done: done };
 }
 
 function saveWeekData(wk, data) {

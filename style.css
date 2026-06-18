@@ -222,6 +222,7 @@ body {
 /* ===== 주간 카테고리 ===== */
 .week-cats { display: flex; flex-direction: column; gap: 11px; margin-top: 6px; }
 .week-cat-row { display: flex; align-items: center; gap: 10px; }
+.week-cat-row--core { border-left: 3px solid var(--primary); padding-left: 8px; border-radius: 0 6px 6px 0; background: rgba(99,102,241,.06); }
 .week-cat-name { min-width: 90px; font-size: 13px; font-weight: 500; color: var(--text); }
 .week-cat-bar { flex: 1; }
 .week-cat-bar .progress-bar-wrap { margin: 0; }
@@ -458,6 +459,8 @@ body {
   transition: all .15s;
 }
 .week-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+.week-tab--core { font-weight: 600; }
+.week-tab--core.active { background: var(--primary); color: white; }
 
 /* ===== 할일 추가 행 ===== */
 .add-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }

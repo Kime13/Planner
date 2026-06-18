@@ -646,19 +646,45 @@ function renderWeeklyNav() {
 
 function renderWeekly() {
   renderWeeklyNav();
-  document.getElementById('week-cats').innerHTML = WEEK_CATS.map(function(cat) {
+
+  // 해당 주가 속한 월의 배정 핵심 액션
+  var monday       = getMondayOfWeek(viewWeekKey);
+  var viewMonthKey = monday.getFullYear() + '-' + pad(monday.getMonth() + 1);
+  var assigned     = getAssignedCoreAction(viewMonthKey);
+  var html         = '';
+
+  // ── Core 행 ──
+  if (assigned) {
+    var ca       = assigned.action;
+    var caColor  = CORE_COLORS[assigned.colorIdx] || '#6366f1';
+    var caCounts = getDailyCountsForCoreAction(ca, viewWeekKey);
+    var caPct    = calcWeekCoreCatProgress(ca, viewWeekKey);
+    var caLabel  = caCounts.total ? caCounts.done + '/' + caCounts.total + ' 완료' : '할일 없음';
+    html += '<div class="week-cat-row week-cat-row--core">'
+      + '<span class="week-cat-name" style="color:' + caColor + '">🎯 ' + escHtml(ca.name) + '</span>'
+      + '<div class="week-cat-bar"><div class="progress-bar-wrap">'
+      + '<div class="progress-bar-fill" style="width:' + caPct + '%;background:' + caColor + '"></div>'
+      + '</div></div>'
+      + '<span class="week-cat-count" style="color:' + (caCounts.total ? caColor : '#c8d0e0') + '">' + caLabel + '</span>'
+      + '</div>';
+  }
+
+  // ── Routine 행 ──
+  html += WEEK_CATS.map(function(cat) {
     var counts = getDailyCountsForWeekCat(cat, viewWeekKey);
     var pct    = calcWeekCatProgressFromDaily(cat, viewWeekKey);
     var color  = WEEKCAT_COLORS[cat] || '#6366f1';
     var label  = counts.total ? counts.done + '/' + counts.total + ' 완료' : '할일 없음';
     return '<div class="week-cat-row">'
-      + '<span class="week-cat-name">' + escHtml(cat) + '</span>'
+      + '<span class="week-cat-name">📌 ' + escHtml(cat) + '</span>'
       + '<div class="week-cat-bar"><div class="progress-bar-wrap">'
       + '<div class="progress-bar-fill" style="width:' + pct + '%;background:' + color + '"></div>'
       + '</div></div>'
       + '<span class="week-cat-count" style="color:' + (counts.total ? 'var(--muted)' : '#c8d0e0') + '">' + label + '</span>'
       + '</div>';
   }).join('');
+
+  document.getElementById('week-cats').innerHTML = html;
 }
 
 function moveWeek(dir) {
@@ -857,12 +883,18 @@ function saveMonthModal() {
 }
 
 /* ===== 주간 모달 ===== */
-var weekModalCat    = WEEK_CATS[0];
+var weekModalCat      = WEEK_CATS[0];
 var editingWeekTaskId = null;
 
+function _getViewMonthAssigned() {
+  var monday       = getMondayOfWeek(viewWeekKey);
+  var viewMonthKey = monday.getFullYear() + '-' + pad(monday.getMonth() + 1);
+  return getAssignedCoreAction(viewMonthKey);
+}
+
 function openWeekModal() {
-  weekModalCat = WEEK_CATS[0];
-  // 모달 타이틀에 현재 보는 주차 표시
+  var assigned = _getViewMonthAssigned();
+  weekModalCat = assigned ? '__core__' : WEEK_CATS[0];
   var isNow = viewWeekKey === curWeekKey;
   document.querySelector('#modal-weekly .modal-title').textContent =
     isNow ? '이번주 목표 편집' : getWeekDateRange(viewWeekKey) + ' 주간 목표';
@@ -872,10 +904,19 @@ function openWeekModal() {
 }
 
 function renderWeekModalTabs() {
-  document.getElementById('week-modal-tabs').innerHTML = WEEK_CATS.map(function(cat) {
+  var assigned = _getViewMonthAssigned();
+  var tabs = '';
+  if (assigned) {
+    var caColor = CORE_COLORS[assigned.colorIdx] || '#6366f1';
+    tabs += '<div class="week-tab week-tab--core' + (weekModalCat === '__core__' ? ' active' : '') + '"'
+      + ' style="' + (weekModalCat === '__core__' ? 'border-color:' + caColor + ';color:' + caColor : '') + '"'
+      + ' onclick="switchWeekTab(\'__core__\')">🎯 ' + escHtml(assigned.action.name) + '</div>';
+  }
+  tabs += WEEK_CATS.map(function(cat) {
     return '<div class="week-tab' + (cat === weekModalCat ? ' active' : '') + '" onclick="switchWeekTab(\'' + cat + '\')">'
-      + escHtml(cat) + '</div>';
+      + '📌 ' + escHtml(cat) + '</div>';
   }).join('');
+  document.getElementById('week-modal-tabs').innerHTML = tabs;
 }
 
 function switchWeekTab(cat) {
@@ -885,44 +926,30 @@ function switchWeekTab(cat) {
 }
 
 function renderWeekModalBody() {
-  var data   = getWeekData(viewWeekKey);
-  var tasks  = data[weekModalCat] || [];
-  var annual = getAnnual();
-  var cores  = annual.coreActions.filter(function(a){ return a.name && a.name.trim(); });
-
-  var coreOptions = '<option value="">핵심목표 없음</option>'
-    + cores.map(function(a){
-        return '<option value="' + escHtml(a.name) + '">' + escHtml(a.name) + '</option>';
-      }).join('');
+  var data     = getWeekData(viewWeekKey);
+  var tasks    = data[weekModalCat] || [];
+  var isCore   = weekModalCat === '__core__';
+  var assigned = isCore ? _getViewMonthAssigned() : null;
+  var annual   = getAnnual();
 
   var taskHtml = tasks.map(function(t) {
-    var coreIdx = cores.findIndex ? cores.findIndex(function(a){ return a.name === t.coreCategory; })
-      : (function(){ for(var _i=0;_i<cores.length;_i++){ if(cores[_i].name===t.coreCategory) return _i; } return -1; })();
-    var color   = coreIdx >= 0 ? CORE_COLORS[coreIdx] : null;
-    var badge   = (t.coreCategory && color)
-      ? '<span class="cat-badge" style="background:' + color + '18;color:' + color + '">' + escHtml(t.coreCategory) + '</span>'
-      : '';
-
     if (t.id === editingWeekTaskId) {
       return '<div class="task-item">'
         + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleWeekTask(\'' + t.id + '\')">'
         + '<input class="task-edit-input" id="ew-' + t.id + '" value="' + escHtml(t.text) + '"'
         + ' onkeydown="if(event.key===\'Enter\')saveEditWeekTask(\'' + t.id + '\');if(event.key===\'Escape\'){editingWeekTaskId=null;renderWeekModalBody();}"'
         + ' onblur="saveEditWeekTask(\'' + t.id + '\')">'
-        + badge
         + '<button class="btn-danger-sm" onclick="deleteWeekTask(\'' + t.id + '\')">×</button>'
         + '</div>';
     }
     return '<div class="task-item' + (t.done ? ' done' : '') + '">'
       + '<input type="checkbox" class="task-check"' + (t.done ? ' checked' : '') + ' onchange="toggleWeekTask(\'' + t.id + '\')">'
       + '<span class="task-text">' + escHtml(t.text) + '</span>'
-      + badge
       + '<button class="btn-edit-sm" onclick="editingWeekTaskId=\'' + t.id + '\';renderWeekModalBody()">✏</button>'
       + '<button class="btn-danger-sm" onclick="deleteWeekTask(\'' + t.id + '\')">×</button>'
       + '</div>';
   }).join('');
 
-  // 편집 중인 항목에 포커스
   setTimeout(function() {
     if (editingWeekTaskId) {
       var inp = document.getElementById('ew-' + editingWeekTaskId);
@@ -930,23 +957,31 @@ function renderWeekModalBody() {
     }
   }, 0);
 
+  var placeholder = isCore ? '핵심 과업 추가...' : '루틴 할 일 추가...';
   document.getElementById('week-modal-body').innerHTML =
-    '<div class="task-list">' + taskHtml + '</div>'
+    '<div class="task-list">' + (taskHtml || '<p style="font-size:13px;color:var(--muted);padding:8px 0">아직 없어요. 추가해보세요!</p>') + '</div>'
     + '<div class="add-row">'
-    + '<select class="add-select" id="week-core-select">' + coreOptions + '</select>'
-    + '<input class="add-input" id="week-add-input" type="text" placeholder="할 일 추가..."'
-    + ' onkeydown="if(event.key===\'Enter\') addWeekTask()">'
+    + '<input class="add-input" id="week-add-input" type="text" placeholder="' + placeholder + '"'
+    + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing) addWeekTask()">'
     + '<button class="btn btn-primary btn-sm" onclick="addWeekTask()">추가</button>'
     + '</div>';
 }
 
 function addWeekTask() {
   var input = document.getElementById('week-add-input');
-  var sel   = document.getElementById('week-core-select');
   var text  = input.value.trim();
   if (!text) return;
-  var data = getWeekData(viewWeekKey);
-  data[weekModalCat].push({ id: uid(), text: text, done: false, coreCategory: sel ? sel.value : '' });
+  var data     = getWeekData(viewWeekKey);
+  var isCore   = weekModalCat === '__core__';
+  var assigned = isCore ? _getViewMonthAssigned() : null;
+  if (!data[weekModalCat]) data[weekModalCat] = [];
+  var task = { id: uid(), text: text, done: false };
+  if (isCore && assigned) {
+    task.coreActionId  = assigned.action.id;
+    task.coreCategory  = assigned.action.name;
+    task.taskType      = 'core';
+  }
+  data[weekModalCat].push(task);
   saveWeekData(viewWeekKey, data);
   input.value = '';
   renderWeekModalBody();
