@@ -37,6 +37,18 @@
     </div>
   </header>
 
+  <!-- 나의 나침반 (비전 레이어 — 연 1회 검토) -->
+  <div class="card vision-card">
+    <div class="card-header">
+      <span class="card-label">🧭 나의 나침반</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:var(--muted)">연 1회 검토</span>
+        <button class="btn btn-edit" onclick="openVisionModal()">편집</button>
+      </div>
+    </div>
+    <div id="vision-content"></div>
+  </div>
+
   <!-- 핵심목표 진척도 + 오늘 달성률 -->
   <div class="card" id="core-progress-card">
     <div class="card-header">
@@ -115,18 +127,6 @@
       <button class="btn btn-edit" onclick="openRecurringModal(null)">+ 추가</button>
     </div>
     <div id="recurring-list"></div>
-  </div>
-
-  <!-- 나의 나침반 (비전 레이어 — 연 1회 검토) -->
-  <div class="card vision-card">
-    <div class="card-header">
-      <span class="card-label">🧭 나의 나침반</span>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:11px;color:var(--muted)">연 1회 검토</span>
-        <button class="btn btn-edit" onclick="openVisionModal()">편집</button>
-      </div>
-    </div>
-    <div id="vision-content"></div>
   </div>
 
   <!-- 기본 설정 -->
